@@ -2,69 +2,60 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Extractor de Remitos</title>
+<title>Extractor de Remitos Mejorado</title>
 
-<!-- Tesseract OCR -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-
-<!-- SheetJS para Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    background: #f4f6f9;
-}
-h2 {
-    color: #333;
-}
-button {
-    padding: 10px 15px;
-    margin: 5px 0;
-    cursor: pointer;
-}
-table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 20px;
-    background: white;
-}
-th, td {
-    border: 1px solid #ccc;
-    padding: 8px;
-    text-align: left;
-}
-th {
-    background: #eaeaea;
-}
-#preview {
-    max-width: 300px;
-    margin-top: 10px;
-}
+body { font-family: Arial; padding:20px; background:#f4f6f9; }
+input, button { padding:8px; margin:5px 0; width:100%; }
+button { cursor:pointer; }
+table { border-collapse:collapse; width:100%; margin-top:20px; background:white; }
+th, td { border:1px solid #ccc; padding:8px; }
+th { background:#eaeaea; }
+textarea { width:100%; height:100px; }
+.form-box { background:white; padding:15px; margin-top:15px; }
 </style>
 </head>
-
 <body>
 
 <h2>📄 Extractor de Datos desde Imagen</h2>
 
 <input type="file" id="imageInput" accept="image/*">
-<br>
-<img id="preview">
-<br>
 <button onclick="procesarImagen()">Extraer Datos</button>
-<button onclick="descargarExcel()">Descargar Excel</button>
 
 <p id="status"></p>
+
+<h3>Texto Detectado</h3>
+<textarea id="textoDetectado"></textarea>
+
+<div class="form-box">
+<h3>Datos Detectados (Editables)</h3>
+
+<label>Número de Cuenta</label>
+<input type="text" id="nroCuenta">
+
+<label>Nombre y Apellido</label>
+<input type="text" id="nombre">
+
+<label>Domicilio</label>
+<input type="text" id="direccion">
+
+<label>Número de Remito</label>
+<input type="text" id="nroRemito">
+
+<button onclick="guardarRegistro()">Guardar Registro</button>
+<button onclick="descargarExcel()">Descargar Excel</button>
+</div>
 
 <table id="tabla">
 <thead>
 <tr>
 <th>Fecha</th>
 <th>N° Cuenta</th>
-<th>Nombre y Apellido</th>
-<th>Dirección</th>
+<th>Nombre</th>
+<th>Domicilio</th>
 <th>N° Remito</th>
 </tr>
 </thead>
@@ -75,61 +66,59 @@ th {
 
 let registros = [];
 
-document.getElementById("imageInput").addEventListener("change", function(e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = function() {
-        document.getElementById("preview").src = reader.result;
-    }
-    reader.readAsDataURL(file);
-});
-
 async function procesarImagen() {
 
     const fileInput = document.getElementById("imageInput");
     if (!fileInput.files.length) {
-        alert("Selecciona una imagen primero.");
+        alert("Selecciona una imagen.");
         return;
     }
 
-    document.getElementById("status").innerText = "Procesando imagen...";
+    document.getElementById("status").innerText = "Procesando...";
 
     const { data: { text } } = await Tesseract.recognize(
         fileInput.files[0],
-        'spa',
-        { logger: m => console.log(m) }
+        'spa'
     );
 
-    console.log("Texto detectado:\n", text);
+    document.getElementById("textoDetectado").value = text;
 
-    // --- Extracción básica con regex ---
-    const nroCuenta = extraerDato(text, /cuenta[:\s]*([0-9]+)/i);
-    const nombre = extraerDato(text, /nombre[:\s]*([A-Za-zÁÉÍÓÚÑ\s]+)/i);
-    const direccion = extraerDato(text, /dirección[:\s]*([A-Za-z0-9ÁÉÍÓÚÑ\s\.\-]+)/i);
-    const nroRemito = extraerDato(text, /remito[:\s]*([0-9]+)/i);
+    // Limpieza básica
+    const texto = text.replace(/\n/g, " ");
+
+    // --- Regex mejorados ---
+    const nroCuenta = extraer(texto, /(cuenta|cta)[^\d]*(\d{4,})/i);
+    const nroRemito = extraer(texto, /(remito|rem|n°)[^\d]*(\d{3,})/i);
+    const direccion = extraer(texto, /(domicilio|dirección|dir)[^A-Za-z0-9]*([A-Za-z0-9\s\.\-]+)/i);
+    const nombre = extraer(texto, /(cliente|nombre|sr\.?|sra\.?)[^A-Za-z]*([A-Za-zÁÉÍÓÚÑ\s]+)/i);
+
+    document.getElementById("nroCuenta").value = nroCuenta;
+    document.getElementById("nroRemito").value = nroRemito;
+    document.getElementById("direccion").value = direccion;
+    document.getElementById("nombre").value = nombre;
+
+    document.getElementById("status").innerText = "Revisa y corrige si es necesario.";
+}
+
+function extraer(texto, regex) {
+    const match = texto.match(regex);
+    return match ? match[2].trim() : "";
+}
+
+function guardarRegistro() {
 
     const fecha = new Date().toLocaleDateString();
 
     const registro = {
         fecha,
-        nroCuenta,
-        nombre,
-        direccion,
-        nroRemito
+        nroCuenta: document.getElementById("nroCuenta").value,
+        nombre: document.getElementById("nombre").value,
+        direccion: document.getElementById("direccion").value,
+        nroRemito: document.getElementById("nroRemito").value
     };
 
     registros.push(registro);
-    agregarATabla(registro);
 
-    document.getElementById("status").innerText = "Datos extraídos correctamente.";
-}
-
-function extraerDato(texto, regex) {
-    const match = texto.match(regex);
-    return match ? match[1].trim() : "No encontrado";
-}
-
-function agregarATabla(registro) {
     const tabla = document.querySelector("#tabla tbody");
     const fila = tabla.insertRow();
 
@@ -138,12 +127,14 @@ function agregarATabla(registro) {
     fila.insertCell(2).innerText = registro.nombre;
     fila.insertCell(3).innerText = registro.direccion;
     fila.insertCell(4).innerText = registro.nroRemito;
+
+    alert("Registro guardado.");
 }
 
 function descargarExcel() {
 
     if (registros.length === 0) {
-        alert("No hay datos para exportar.");
+        alert("No hay datos.");
         return;
     }
 
@@ -159,3 +150,4 @@ function descargarExcel() {
 
 </body>
 </html>
+
