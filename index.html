@@ -3,101 +3,62 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos con Registro Editable y Filtro de Fechas</title>
+<title>Extractor de Remitos con Extracción Detallada</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    background: #f9f9f9;
-  }
-  input, button, select {
-    padding: 8px;
-    margin: 5px 0;
-    box-sizing: border-box;
-    width: 100%;
-  }
-  textarea {
-    width: 100%;
-    height: 120px;
-    margin-top: 10px;
-    font-family: monospace;
-  }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 20px;
-    background: white;
-  }
-  th, td {
-    border: 1px solid #ccc;
-    padding: 6px 8px;
-    text-align: left;
-  }
-  th {
-    background: #eee;
-  }
-  .box {
-    background: white;
-    padding: 15px;
-    margin-top: 15px;
-  }
-  td[contenteditable="true"] {
-    background: #ffffe0;
-    outline: none;
-  }
-  label {
-    font-weight: bold;
-    margin-top: 10px;
-    display: block;
-  }
-  .inline-flex {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .inline-flex > * {
-    flex: 1;
-    min-width: 120px;
-  }
+  body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; }
+  input, button, textarea { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+  textarea { height: 140px; font-family: monospace; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; background: white; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; }
+  th { background: #eee; }
+  td[contenteditable="true"] { background: #ffffcc; outline: none; }
+  label { font-weight: bold; margin-top: 10px; display: block; }
+  .flex-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .flex-row > * { flex: 1; min-width: 120px; }
+  .box { background: white; padding: 15px; margin-top: 15px; }
+  #log { background: #222; color: #eee; padding: 10px; height: 120px; overflow-y: auto; font-family: monospace; margin-top: 10px; }
 </style>
 </head>
 <body>
 
-<h2>Extractor de Remitos - Registro Editable con Filtro de Fechas</h2>
+<h2>Extractor de Remitos - Extracción Paso a Paso</h2>
 
 <input type="file" id="imageInput" accept="image/*" />
-<button onclick="procesarImagen()">Extraer Datos</button>
+<button onclick="procesarImagen()">Procesar Imagen y Extraer</button>
 
 <p id="estado"></p>
 
-<h3>Texto Detectado</h3>
+<h3>Texto OCR Detectado</h3>
 <textarea id="textoDetectado" readonly></textarea>
 
 <div class="box">
-<h3>Datos Detectados (Editables antes de guardar)</h3>
+<h3>Datos Detectados (Editables)</h3>
+
+<label>Nombre / Razón Social (Sr.(es))</label>
+<input type="text" id="nombre" placeholder="Nombre o Razón Social" />
+
+<label>Cuenta / Cliente</label>
+<input type="text" id="cuenta" placeholder="Número de cuenta / cliente" />
+
+<label>Domicilio</label>
+<input type="text" id="domicilio" placeholder="Domicilio" />
+
+<label>Número de Remito (Nro)</label>
+<input type="text" id="remito" placeholder="Número de remito" />
 
 <label>Fecha del Registro</label>
 <input type="date" id="fechaRegistro" />
-
-<label>Nombre / Razón Social</label>
-<input type="text" id="nombre" placeholder="Nombre / Razón Social" />
-
-<label>Número de Cliente</label>
-<input type="text" id="cliente" placeholder="Número de Cliente" />
-
-<label>Número de Remito</label>
-<input type="text" id="remito" placeholder="Número de Remito" />
 
 <button onclick="guardarRegistro()">Guardar Registro</button>
 </div>
 
 <div class="box">
   <h3>Filtrar Registros por Fecha</h3>
-  <div class="inline-flex">
+  <div class="flex-row">
     <div>
       <label>Desde</label>
       <input type="date" id="fechaFiltroDesde" />
@@ -116,21 +77,34 @@
 <tr>
 <th>Fecha</th>
 <th>Nombre</th>
-<th>Número Cliente</th>
-<th>Número Remito</th>
+<th>Cuenta</th>
+<th>Domicilio</th>
+<th>Remito</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 
+<h3>Log de extracción (para depurar)</h3>
+<div id="log"></div>
+
 <script>
 let registros = [];
 
+function log(msg) {
+  const logDiv = document.getElementById('log');
+  logDiv.innerText += msg + "\n";
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function limpiarLog() {
+  document.getElementById('log').innerText = '';
+}
+
 function formatDateForInput(date) {
-  // formato yyyy-mm-dd para input type=date
   const d = new Date(date);
-  const pad = n => (n<10 ? "0"+n : n);
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const pad = n => (n < 10 ? "0" + n : n);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 async function procesarImagen() {
@@ -139,6 +113,9 @@ async function procesarImagen() {
     alert("Por favor selecciona una imagen primero.");
     return;
   }
+  limpiarLog();
+  log("Iniciando procesamiento...");
+
   document.getElementById("estado").innerText = "Procesando imagen, espera...";
 
   const file = input.files[0];
@@ -147,13 +124,14 @@ async function procesarImagen() {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
+  // Rotar 90 grados para orientación correcta (ajustar según tu necesidad)
   canvas.width = imageBitmap.height;
   canvas.height = imageBitmap.width;
-
   ctx.translate(canvas.width / 2, canvas.height / 2);
   ctx.rotate(-90 * Math.PI / 180);
   ctx.drawImage(imageBitmap, -imageBitmap.width / 2, -imageBitmap.height / 2);
 
+  // Binarizar para mejorar OCR
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = imgData.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -163,62 +141,97 @@ async function procesarImagen() {
   }
   ctx.putImageData(imgData, 0, 0);
 
+  log("Imagen preparada para OCR.");
+
   const { data: { text } } = await Tesseract.recognize(canvas, "spa", {
-    logger: (m) => console.log(m),
+    logger: m => {
+      if(m.status === 'recognizing text') {
+        document.getElementById("estado").innerText = `OCR: ${Math.round(m.progress * 100)}%`;
+      }
+    }
   });
 
   document.getElementById("textoDetectado").value = text;
+  document.getElementById("estado").innerText = "OCR completo. Analizando datos...";
 
   extraerDatos(text);
+  document.getElementById("estado").innerText = "Datos extraídos. Por favor revisa y corrige si es necesario.";
 
-  document.getElementById("estado").innerText = "Datos extraídos, revisa y corrige si es necesario.";
-
-  // Colocar fecha actual por defecto en fechaRegistro
+  // Fecha actual por defecto
   const hoy = new Date();
   document.getElementById("fechaRegistro").value = formatDateForInput(hoy);
 }
 
 function extraerDatos(texto) {
-  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 3);
+  limpiarLog();
+  log("Inicio de extracción de datos...");
 
+  // Separar líneas, limpiar y filtrar líneas cortas
+  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 3);
+  log(`Líneas totales obtenidas: ${lineas.length}`);
+
+  // 1. Extraer Nombre / Razón Social (línea previa a IVA Responsable)
   let nombre = "";
   for (let i = 1; i < lineas.length; i++) {
     if (/IVA\s+Responsable/i.test(lineas[i])) {
       nombre = lineas[i - 1];
+      log(`Nombre detectado (línea antes de IVA Responsable): "${nombre}"`);
       break;
     }
   }
+  if (!nombre) log("No se encontró Nombre / Razón Social.");
 
-  let cliente = "";
+  // 2. Extraer Cuenta / Cliente (línea que contenga 'Cliente' seguido de número)
+  let cuenta = "";
   for (const linea of lineas) {
     const m = linea.match(/Cliente\s*[:\s]*([0-9]+)/i);
     if (m) {
-      cliente = m[1];
+      cuenta = m[1];
+      log(`Cuenta / Cliente detectado: "${cuenta}"`);
       break;
     }
   }
+  if (!cuenta) log("No se encontró Cuenta / Cliente.");
 
+  // 3. Extraer Domicilio (línea que contenga 'Domicilio')
+  let domicilio = "";
+  for (const linea of lineas) {
+    const m = linea.match(/Domicilio\s*[:\s]*(.+)/i);
+    if (m) {
+      domicilio = m[1].trim();
+      log(`Domicilio detectado: "${domicilio}"`);
+      break;
+    }
+  }
+  if (!domicilio) log("No se encontró Domicilio.");
+
+  // 4. Extraer Nro Remito con prefijos indicados
   let remito = "";
   for (const linea of lineas) {
     const m = linea.match(/\b(1101|1104|0104|3008)-\d+\b/);
     if (m) {
       remito = m[0];
+      log(`Número de remito detectado: "${remito}"`);
       break;
     }
   }
+  if (!remito) log("No se encontró Número de remito.");
 
+  // Poner en inputs para que usuario pueda corregir
   document.getElementById("nombre").value = nombre;
-  document.getElementById("cliente").value = cliente;
+  document.getElementById("cuenta").value = cuenta;
+  document.getElementById("domicilio").value = domicilio;
   document.getElementById("remito").value = remito;
 }
 
 function guardarRegistro() {
   const fechaStr = document.getElementById("fechaRegistro").value;
   const nombre = document.getElementById("nombre").value.trim();
-  const cliente = document.getElementById("cliente").value.trim();
+  const cuenta = document.getElementById("cuenta").value.trim();
+  const domicilio = document.getElementById("domicilio").value.trim();
   const remito = document.getElementById("remito").value.trim();
 
-  if (!fechaStr || !nombre || !cliente || !remito) {
+  if (!fechaStr || !nombre || !cuenta || !remito) {
     alert("Completa todos los campos antes de guardar.");
     return;
   }
@@ -229,23 +242,24 @@ function guardarRegistro() {
     return;
   }
 
-  // Guardar en registros
-  registros.push({ fecha: fechaStr, nombre, cliente, remito });
+  registros.push({ fecha: fechaStr, nombre, cuenta, domicilio, remito });
+  agregarFilaEditable({ fecha: fechaStr, nombre, cuenta, domicilio, remito });
 
-  // Mostrar en tabla (editable)
-  agregarFilaEditable({ fecha: fechaStr, nombre, cliente, remito });
-
-  // Limpiar inputs excepto fecha que queda
+  // Limpiar inputs menos fecha
   document.getElementById("nombre").value = "";
-  document.getElementById("cliente").value = "";
+  document.getElementById("cuenta").value = "";
+  document.getElementById("domicilio").value = "";
   document.getElementById("remito").value = "";
+  document.getElementById("fechaRegistro").value = fechaStr;
+
+  alert("Registro guardado.");
 }
 
-function agregarFilaEditable({ fecha, nombre, cliente, remito }) {
+function agregarFilaEditable({ fecha, nombre, cuenta, domicilio, remito }) {
   const tbody = document.querySelector("#tabla tbody");
   const fila = tbody.insertRow();
 
-  // Fecha editable input type=date
+  // Fecha editable input
   const celdaFecha = fila.insertCell();
   const inputFecha = document.createElement("input");
   inputFecha.type = "date";
@@ -258,10 +272,15 @@ function agregarFilaEditable({ fecha, nombre, cliente, remito }) {
   celdaNombre.contentEditable = "true";
   celdaNombre.innerText = nombre;
 
-  // Cliente editable contenteditable
-  const celdaCliente = fila.insertCell();
-  celdaCliente.contentEditable = "true";
-  celdaCliente.innerText = cliente;
+  // Cuenta editable contenteditable
+  const celdaCuenta = fila.insertCell();
+  celdaCuenta.contentEditable = "true";
+  celdaCuenta.innerText = cuenta;
+
+  // Domicilio editable contenteditable
+  const celdaDomicilio = fila.insertCell();
+  celdaDomicilio.contentEditable = "true";
+  celdaDomicilio.innerText = domicilio;
 
   // Remito editable contenteditable
   const celdaRemito = fila.insertCell();
@@ -286,11 +305,9 @@ function mostrarRegistrosFiltrados() {
     return;
   }
 
-  // Limpiar tabla
   const tbody = document.querySelector("#tabla tbody");
   tbody.innerHTML = "";
 
-  // Filtrar registros y mostrarlos (editable)
   registros
     .filter(r => {
       const f = new Date(r.fecha);
@@ -300,7 +317,6 @@ function mostrarRegistrosFiltrados() {
 }
 
 function exportarExcelFiltrado() {
-  // Leer filas visibles actuales de la tabla (tabla ya filtrada)
   const tbody = document.querySelector("#tabla tbody");
   const filas = Array.from(tbody.rows);
 
@@ -309,13 +325,14 @@ function exportarExcelFiltrado() {
     return;
   }
 
-  // Construir array con datos editados
+  // Leer datos editados en la tabla
   const datos = filas.map(fila => {
     const fecha = fila.cells[0].querySelector("input").value;
     const nombre = fila.cells[1].innerText.trim();
-    const cliente = fila.cells[2].innerText.trim();
-    const remito = fila.cells[3].innerText.trim();
-    return { fecha, nombre, cliente, remito };
+    const cuenta = fila.cells[2].innerText.trim();
+    const domicilio = fila.cells[3].innerText.trim();
+    const remito = fila.cells[4].innerText.trim();
+    return { fecha, nombre, cuenta, domicilio, remito };
   });
 
   const ws = XLSX.utils.json_to_sheet(datos);
@@ -331,3 +348,4 @@ function exportarExcelFiltrado() {
 
 </body>
 </html>
+
