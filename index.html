@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Extractor de Remitos</title>
+
+<!-- Tesseract OCR -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
+<!-- SheetJS para Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #f4f6f9;
+}
+h2 {
+    color: #333;
+}
+button {
+    padding: 10px 15px;
+    margin: 5px 0;
+    cursor: pointer;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 20px;
+    background: white;
+}
+th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+}
+th {
+    background: #eaeaea;
+}
+#preview {
+    max-width: 300px;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>📄 Extractor de Datos desde Imagen</h2>
+
+<input type="file" id="imageInput" accept="image/*">
+<br>
+<img id="preview">
+<br>
+<button onclick="procesarImagen()">Extraer Datos</button>
+<button onclick="descargarExcel()">Descargar Excel</button>
+
+<p id="status"></p>
+
+<table id="tabla">
+<thead>
+<tr>
+<th>Fecha</th>
+<th>N° Cuenta</th>
+<th>Nombre y Apellido</th>
+<th>Dirección</th>
+<th>N° Remito</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script>
+
+let registros = [];
+
+document.getElementById("imageInput").addEventListener("change", function(e) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = function() {
+        document.getElementById("preview").src = reader.result;
+    }
+    reader.readAsDataURL(file);
+});
+
+async function procesarImagen() {
+
+    const fileInput = document.getElementById("imageInput");
+    if (!fileInput.files.length) {
+        alert("Selecciona una imagen primero.");
+        return;
+    }
+
+    document.getElementById("status").innerText = "Procesando imagen...";
+
+    const { data: { text } } = await Tesseract.recognize(
+        fileInput.files[0],
+        'spa',
+        { logger: m => console.log(m) }
+    );
+
+    console.log("Texto detectado:\n", text);
+
+    // --- Extracción básica con regex ---
+    const nroCuenta = extraerDato(text, /cuenta[:\s]*([0-9]+)/i);
+    const nombre = extraerDato(text, /nombre[:\s]*([A-Za-zÁÉÍÓÚÑ\s]+)/i);
+    const direccion = extraerDato(text, /dirección[:\s]*([A-Za-z0-9ÁÉÍÓÚÑ\s\.\-]+)/i);
+    const nroRemito = extraerDato(text, /remito[:\s]*([0-9]+)/i);
+
+    const fecha = new Date().toLocaleDateString();
+
+    const registro = {
+        fecha,
+        nroCuenta,
+        nombre,
+        direccion,
+        nroRemito
+    };
+
+    registros.push(registro);
+    agregarATabla(registro);
+
+    document.getElementById("status").innerText = "Datos extraídos correctamente.";
+}
+
+function extraerDato(texto, regex) {
+    const match = texto.match(regex);
+    return match ? match[1].trim() : "No encontrado";
+}
+
+function agregarATabla(registro) {
+    const tabla = document.querySelector("#tabla tbody");
+    const fila = tabla.insertRow();
+
+    fila.insertCell(0).innerText = registro.fecha;
+    fila.insertCell(1).innerText = registro.nroCuenta;
+    fila.insertCell(2).innerText = registro.nombre;
+    fila.insertCell(3).innerText = registro.direccion;
+    fila.insertCell(4).innerText = registro.nroRemito;
+}
+
+function descargarExcel() {
+
+    if (registros.length === 0) {
+        alert("No hay datos para exportar.");
+        return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(registros);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Registros");
+
+    const fechaHoy = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(workbook, "Registros_" + fechaHoy + ".xlsx");
+}
+
+</script>
+
+</body>
+</html>
