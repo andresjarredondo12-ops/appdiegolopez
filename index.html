@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Extractor Remitos Adaptado</title>
+<title>Sistema de Carga de Remitos</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-body { font-family: Arial; padding:20px; background:#f2f2f2; }
+body { font-family: Arial; padding:20px; background:#f4f4f4; }
 input, button { padding:8px; margin:5px 0; width:100%; }
 textarea { width:100%; height:120px; }
 table { border-collapse:collapse; width:100%; margin-top:20px; background:white; }
@@ -19,38 +19,42 @@ th { background:#eaeaea; }
 </head>
 <body>
 
-<h2>Extractor de Remitos - Formato Específico</h2>
+<h2>📄 Sistema de Extracción de Remitos</h2>
 
 <input type="file" id="imageInput" accept="image/*">
-<button onclick="procesarImagen()">Extraer Datos</button>
+<button onclick="procesarImagen()">Procesar Imagen</button>
 
 <p id="estado"></p>
 
-<h3>Texto Detectado</h3>
-<textarea id="textoDetectado"></textarea>
+<h3>Texto OCR Detectado</h3>
+<textarea id="textoOCR"></textarea>
 
 <div class="box">
 <h3>Datos Detectados (Editables)</h3>
 
-<label>Nombre / Razón Social</label>
+<label>Sr.(es)</label>
 <input type="text" id="nombre">
 
-<label>Número de Cliente</label>
-<input type="text" id="cliente">
+<label>Cuenta</label>
+<input type="text" id="cuenta">
 
-<label>Número de Remito</label>
+<label>Domicilio</label>
+<input type="text" id="domicilio">
+
+<label>N° Remito</label>
 <input type="text" id="remito">
 
 <button onclick="guardar()">Guardar Registro</button>
-<button onclick="exportarExcel()">Exportar a Excel</button>
+<button onclick="finalizar()">Finalizar y Exportar Excel</button>
 </div>
 
 <table id="tabla">
 <thead>
 <tr>
 <th>Fecha</th>
-<th>Nombre</th>
-<th>N° Cliente</th>
+<th>Sr.(es)</th>
+<th>Cuenta</th>
+<th>Domicilio</th>
 <th>N° Remito</th>
 </tr>
 </thead>
@@ -61,75 +65,106 @@ th { background:#eaeaea; }
 
 let registros = [];
 
+// ---- PROCESAMIENTO CON MEJORA DE IMAGEN ----
 async function procesarImagen() {
 
     const input = document.getElementById("imageInput");
-
     if (!input.files.length) {
-        alert("Selecciona una imagen.");
+        alert("Seleccione una imagen.");
         return;
     }
 
     document.getElementById("estado").innerText = "Procesando imagen...";
 
-    const { data: { text } } = await Tesseract.recognize(
-        input.files[0],
-        'spa'
-    );
+    const file = input.files[0];
+    const imageBitmap = await createImageBitmap(file);
 
-    document.getElementById("textoDetectado").value = text;
+    // Canvas para mejorar contraste
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
 
-    detectarDatos(text);
+    canvas.width = imageBitmap.height;  // rotamos
+    canvas.height = imageBitmap.width;
 
-    document.getElementById("estado").innerText = "Revisa los datos detectados.";
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(-90 * Math.PI / 180);
+    ctx.drawImage(imageBitmap, -imageBitmap.width/2, -imageBitmap.height/2);
+
+    // Aumentar contraste
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        let avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        avg = avg > 150 ? 255 : 0;
+        data[i] = data[i+1] = data[i+2] = avg;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    const { data: { text } } = await Tesseract.recognize(canvas, 'spa');
+
+    document.getElementById("textoOCR").value = text;
+
+    extraerDatos(text);
+
+    document.getElementById("estado").innerText = "Datos detectados.";
 }
 
-function detectarDatos(texto) {
+// ---- EXTRACCIÓN ESPECÍFICA ----
+function extraerDatos(texto) {
 
-    // --- Nombre (línea antes de IVA Responsable) ---
-    let nombreMatch = texto.match(/([A-ZÁÉÍÓÚÑ\s]+)\s+IVA Responsable/i);
+    let limpio = texto.replace(/\n/g, " ");
+
+    // Sr.(es)
+    let nombreMatch = limpio.match(/Sr\.?\s*:? ?([A-ZÁÉÍÓÚÑ\s]+)/i);
     let nombre = nombreMatch ? nombreMatch[1].trim() : "";
 
-    // --- Cliente ---
-    let clienteMatch = texto.match(/Cliente[:\s]*([0-9]+)/i);
-    let cliente = clienteMatch ? clienteMatch[1] : "";
+    // Cuenta
+    let cuentaMatch = limpio.match(/Cliente[:\s]*([0-9]+)/i);
+    let cuenta = cuentaMatch ? cuentaMatch[1] : "";
 
-    // --- Remito formato 0000-000000 ---
-    let remitoMatch = texto.match(/\d{4}-\d{6}/);
+    // Domicilio
+    let domicilioMatch = limpio.match(/Domicilio[:\s]*([A-Za-z0-9\s\.\-]+)/i);
+    let domicilio = domicilioMatch ? domicilioMatch[1].trim() : "";
+
+    // N° Remito con prefijos específicos
+    let remitoMatch = limpio.match(/(1101|1104|0104|3008)-\d+/);
     let remito = remitoMatch ? remitoMatch[0] : "";
 
     document.getElementById("nombre").value = nombre;
-    document.getElementById("cliente").value = cliente;
+    document.getElementById("cuenta").value = cuenta;
+    document.getElementById("domicilio").value = domicilio;
     document.getElementById("remito").value = remito;
 }
 
+// ---- GUARDAR REGISTRO ----
 function guardar() {
 
     const fecha = new Date().toLocaleDateString();
-    const nombre = document.getElementById("nombre").value;
-    const cliente = document.getElementById("cliente").value;
-    const remito = document.getElementById("remito").value;
 
-    if (!nombre || !remito) {
-        alert("Debe completar al menos Nombre y Remito.");
-        return;
-    }
+    const registro = {
+        fecha,
+        nombre: document.getElementById("nombre").value,
+        cuenta: document.getElementById("cuenta").value,
+        domicilio: document.getElementById("domicilio").value,
+        remito: document.getElementById("remito").value
+    };
 
-    const registro = { fecha, nombre, cliente, remito };
     registros.push(registro);
 
     const tabla = document.querySelector("#tabla tbody");
     const fila = tabla.insertRow();
 
-    fila.insertCell(0).innerText = fecha;
-    fila.insertCell(1).innerText = nombre;
-    fila.insertCell(2).innerText = cliente;
-    fila.insertCell(3).innerText = remito;
+    fila.insertCell(0).innerText = registro.fecha;
+    fila.insertCell(1).innerText = registro.nombre;
+    fila.insertCell(2).innerText = registro.cuenta;
+    fila.insertCell(3).innerText = registro.domicilio;
+    fila.insertCell(4).innerText = registro.remito;
 
     alert("Registro guardado.");
 }
 
-function exportarExcel() {
+// ---- FINALIZAR Y EXPORTAR ----
+function finalizar() {
 
     if (registros.length === 0) {
         alert("No hay registros.");
@@ -138,10 +173,15 @@ function exportarExcel() {
 
     const ws = XLSX.utils.json_to_sheet(registros);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Registros");
+    XLSX.utils.book_append_sheet(wb, ws, "Remitos");
 
     const fechaHoy = new Date().toISOString().split("T")[0];
     XLSX.writeFile(wb, "Remitos_" + fechaHoy + ".xlsx");
+
+    registros = [];
+    document.querySelector("#tabla tbody").innerHTML = "";
+
+    alert("Excel generado correctamente.");
 }
 
 </script>
