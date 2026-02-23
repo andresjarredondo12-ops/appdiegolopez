@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos Mejorado</title>
+<title>Extractor de Remitos con Registro Editable y Filtro de Fechas</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -14,11 +14,11 @@
     padding: 20px;
     background: #f9f9f9;
   }
-  input, button {
-    padding: 10px;
+  input, button, select {
+    padding: 8px;
     margin: 5px 0;
-    width: 100%;
     box-sizing: border-box;
+    width: 100%;
   }
   textarea {
     width: 100%;
@@ -34,7 +34,7 @@
   }
   th, td {
     border: 1px solid #ccc;
-    padding: 8px;
+    padding: 6px 8px;
     text-align: left;
   }
   th {
@@ -45,11 +45,29 @@
     padding: 15px;
     margin-top: 15px;
   }
+  td[contenteditable="true"] {
+    background: #ffffe0;
+    outline: none;
+  }
+  label {
+    font-weight: bold;
+    margin-top: 10px;
+    display: block;
+  }
+  .inline-flex {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .inline-flex > * {
+    flex: 1;
+    min-width: 120px;
+  }
 </style>
 </head>
 <body>
 
-<h2>Extractor de Remitos - Versión Mejorada</h2>
+<h2>Extractor de Remitos - Registro Editable con Filtro de Fechas</h2>
 
 <input type="file" id="imageInput" accept="image/*" />
 <button onclick="procesarImagen()">Extraer Datos</button>
@@ -60,7 +78,10 @@
 <textarea id="textoDetectado" readonly></textarea>
 
 <div class="box">
-<h3>Datos Detectados (Editables)</h3>
+<h3>Datos Detectados (Editables antes de guardar)</h3>
+
+<label>Fecha del Registro</label>
+<input type="date" id="fechaRegistro" />
 
 <label>Nombre / Razón Social</label>
 <input type="text" id="nombre" placeholder="Nombre / Razón Social" />
@@ -72,7 +93,22 @@
 <input type="text" id="remito" placeholder="Número de Remito" />
 
 <button onclick="guardarRegistro()">Guardar Registro</button>
-<button onclick="exportarExcel()">Finalizar y Exportar Excel</button>
+</div>
+
+<div class="box">
+  <h3>Filtrar Registros por Fecha</h3>
+  <div class="inline-flex">
+    <div>
+      <label>Desde</label>
+      <input type="date" id="fechaFiltroDesde" />
+    </div>
+    <div>
+      <label>Hasta</label>
+      <input type="date" id="fechaFiltroHasta" />
+    </div>
+  </div>
+  <button onclick="mostrarRegistrosFiltrados()">Mostrar Registros</button>
+  <button onclick="exportarExcelFiltrado()">Exportar Excel Filtrado</button>
 </div>
 
 <table id="tabla">
@@ -90,6 +126,13 @@
 <script>
 let registros = [];
 
+function formatDateForInput(date) {
+  // formato yyyy-mm-dd para input type=date
+  const d = new Date(date);
+  const pad = n => (n<10 ? "0"+n : n);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
 async function procesarImagen() {
   const input = document.getElementById("imageInput");
   if (!input.files.length) {
@@ -101,11 +144,9 @@ async function procesarImagen() {
   const file = input.files[0];
   const imageBitmap = await createImageBitmap(file);
 
-  // Canvas para rotar y mejorar imagen (180 grados si está horizontal invertida)
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  // Suponemos imagen vertical, rotamos -90 grados para que quede horizontal legible
   canvas.width = imageBitmap.height;
   canvas.height = imageBitmap.width;
 
@@ -113,36 +154,33 @@ async function procesarImagen() {
   ctx.rotate(-90 * Math.PI / 180);
   ctx.drawImage(imageBitmap, -imageBitmap.width / 2, -imageBitmap.height / 2);
 
-  // Mejorar contraste (binarizar)
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = imgData.data;
   for (let i = 0; i < d.length; i += 4) {
-    // promedio de RGB
     const avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
-    const val = avg > 150 ? 255 : 0; // umbral
+    const val = avg > 150 ? 255 : 0;
     d[i] = d[i + 1] = d[i + 2] = val;
   }
   ctx.putImageData(imgData, 0, 0);
 
-  // Ejecutar OCR
   const { data: { text } } = await Tesseract.recognize(canvas, "spa", {
     logger: (m) => console.log(m),
-    // Puedes agregar opciones aquí si quieres, por ejemplo:
-    // tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
   });
 
   document.getElementById("textoDetectado").value = text;
 
-  // Extraer datos
   extraerDatos(text);
+
   document.getElementById("estado").innerText = "Datos extraídos, revisa y corrige si es necesario.";
+
+  // Colocar fecha actual por defecto en fechaRegistro
+  const hoy = new Date();
+  document.getElementById("fechaRegistro").value = formatDateForInput(hoy);
 }
 
 function extraerDatos(texto) {
-  // Dividir en líneas y limpiar líneas muy cortas
   const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 3);
 
-  // Buscar línea con IVA Responsable y tomar la anterior como nombre
   let nombre = "";
   for (let i = 1; i < lineas.length; i++) {
     if (/IVA\s+Responsable/i.test(lineas[i])) {
@@ -151,7 +189,6 @@ function extraerDatos(texto) {
     }
   }
 
-  // Buscar "Cliente" seguido de número
   let cliente = "";
   for (const linea of lineas) {
     const m = linea.match(/Cliente\s*[:\s]*([0-9]+)/i);
@@ -161,7 +198,6 @@ function extraerDatos(texto) {
     }
   }
 
-  // Buscar número de remito que empiece con alguno de los prefijos indicados
   let remito = "";
   for (const linea of lineas) {
     const m = linea.match(/\b(1101|1104|0104|3008)-\d+\b/);
@@ -177,52 +213,119 @@ function extraerDatos(texto) {
 }
 
 function guardarRegistro() {
+  const fechaStr = document.getElementById("fechaRegistro").value;
   const nombre = document.getElementById("nombre").value.trim();
   const cliente = document.getElementById("cliente").value.trim();
   const remito = document.getElementById("remito").value.trim();
 
-  if (!nombre || !cliente || !remito) {
-    alert("Por favor completa todos los campos antes de guardar.");
+  if (!fechaStr || !nombre || !cliente || !remito) {
+    alert("Completa todos los campos antes de guardar.");
     return;
   }
 
-  const fecha = new Date().toLocaleDateString();
+  const fecha = new Date(fechaStr);
+  if (isNaN(fecha.getTime())) {
+    alert("Fecha inválida.");
+    return;
+  }
 
-  registros.push({ fecha, nombre, cliente, remito });
+  // Guardar en registros
+  registros.push({ fecha: fechaStr, nombre, cliente, remito });
 
-  const tbody = document.querySelector("#tabla tbody");
-  const fila = tbody.insertRow();
+  // Mostrar en tabla (editable)
+  agregarFilaEditable({ fecha: fechaStr, nombre, cliente, remito });
 
-  fila.insertCell(0).innerText = fecha;
-  fila.insertCell(1).innerText = nombre;
-  fila.insertCell(2).innerText = cliente;
-  fila.insertCell(3).innerText = remito;
-
-  alert("Registro guardado correctamente.");
-
-  // Limpiar inputs para siguiente registro
+  // Limpiar inputs excepto fecha que queda
   document.getElementById("nombre").value = "";
   document.getElementById("cliente").value = "";
   document.getElementById("remito").value = "";
 }
 
-function exportarExcel() {
-  if (registros.length === 0) {
-    alert("No hay registros para exportar.");
+function agregarFilaEditable({ fecha, nombre, cliente, remito }) {
+  const tbody = document.querySelector("#tabla tbody");
+  const fila = tbody.insertRow();
+
+  // Fecha editable input type=date
+  const celdaFecha = fila.insertCell();
+  const inputFecha = document.createElement("input");
+  inputFecha.type = "date";
+  inputFecha.value = fecha;
+  inputFecha.style.width = "130px";
+  celdaFecha.appendChild(inputFecha);
+
+  // Nombre editable contenteditable
+  const celdaNombre = fila.insertCell();
+  celdaNombre.contentEditable = "true";
+  celdaNombre.innerText = nombre;
+
+  // Cliente editable contenteditable
+  const celdaCliente = fila.insertCell();
+  celdaCliente.contentEditable = "true";
+  celdaCliente.innerText = cliente;
+
+  // Remito editable contenteditable
+  const celdaRemito = fila.insertCell();
+  celdaRemito.contentEditable = "true";
+  celdaRemito.innerText = remito;
+}
+
+function mostrarRegistrosFiltrados() {
+  const desdeStr = document.getElementById("fechaFiltroDesde").value;
+  const hastaStr = document.getElementById("fechaFiltroHasta").value;
+
+  if (!desdeStr || !hastaStr) {
+    alert("Selecciona ambas fechas para filtrar.");
     return;
   }
 
-  const ws = XLSX.utils.json_to_sheet(registros);
+  const desde = new Date(desdeStr);
+  const hasta = new Date(hastaStr);
+
+  if (isNaN(desde.getTime()) || isNaN(hasta.getTime()) || desde > hasta) {
+    alert("Rango de fechas inválido.");
+    return;
+  }
+
+  // Limpiar tabla
+  const tbody = document.querySelector("#tabla tbody");
+  tbody.innerHTML = "";
+
+  // Filtrar registros y mostrarlos (editable)
+  registros
+    .filter(r => {
+      const f = new Date(r.fecha);
+      return f >= desde && f <= hasta;
+    })
+    .forEach(r => agregarFilaEditable(r));
+}
+
+function exportarExcelFiltrado() {
+  // Leer filas visibles actuales de la tabla (tabla ya filtrada)
+  const tbody = document.querySelector("#tabla tbody");
+  const filas = Array.from(tbody.rows);
+
+  if (filas.length === 0) {
+    alert("No hay registros para exportar en el rango seleccionado.");
+    return;
+  }
+
+  // Construir array con datos editados
+  const datos = filas.map(fila => {
+    const fecha = fila.cells[0].querySelector("input").value;
+    const nombre = fila.cells[1].innerText.trim();
+    const cliente = fila.cells[2].innerText.trim();
+    const remito = fila.cells[3].innerText.trim();
+    return { fecha, nombre, cliente, remito };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Remitos");
+  XLSX.utils.book_append_sheet(wb, ws, "Remitos Filtrados");
 
   const fechaHoy = new Date().toISOString().split("T")[0];
-  XLSX.writeFile(wb, "Remitos_" + fechaHoy + ".xlsx");
+  XLSX.writeFile(wb, "RemitosFiltrados_" + fechaHoy + ".xlsx");
 
-  registros = [];
-  document.querySelector("#tabla tbody").innerHTML = "";
-
-  alert("Archivo Excel generado y registros limpiados.");
+  alert("Archivo Excel generado con registros filtrados.");
 }
 </script>
 
