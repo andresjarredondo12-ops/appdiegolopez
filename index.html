@@ -3,84 +3,83 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos Mejorado</title>
+<title>Extractor de Remitos - Versión Final</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #f4f7f6; }
-  .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-  h2 { text-align: center; color: #2c3e50; }
-  label { font-weight: bold; display: block; margin-top: 15px; font-size: 14px; color: #34495e; }
-  input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #dcdde1; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
-  button { width: 100%; padding: 12px; margin-top: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.3s; }
-  .btn-process { background-color: #3498db; color: white; }
-  .btn-save { background-color: #27ae60; color: white; }
-  .btn-excel { background-color: #f39c12; color: white; }
-  #estado { text-align: center; font-weight: bold; color: #e67e22; min-height: 20px; margin-top:10px; }
-  .table-container { margin-top: 30px; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { border: 1px solid #dcdde1; padding: 8px; text-align: left; }
-  th { background: #f8f9fa; }
-  td[contenteditable="true"] { background: #fffbcc; outline: none; }
-  .flex-row { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; }
-  .flex-row > div { flex: 1; min-width: 120px; }
+  body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f0f2f5; }
+  .container { max-width: 600px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+  h2 { text-align: center; color: #1e88e5; margin-bottom: 20px; }
+  
+  .upload-section { background: #e3f2fd; border: 2px dashed #1e88e5; padding: 20px; text-align: center; border-radius: 10px; margin-bottom: 20px; }
+  
+  label { font-weight: bold; display: block; margin-top: 15px; color: #444; font-size: 0.9em; }
+  input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1em; }
+  
+  /* Resaltado para revisión manual */
+  input:focus { border-color: #f39c12; outline: none; background: #fffde7; }
+
+  button { width: 100%; padding: 15px; margin-top: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+  .btn-process { background-color: #1e88e5; color: white; }
+  .btn-save { background-color: #2e7d32; color: white; margin-top: 25px; font-size: 1.1em; }
+  .btn-excel { background-color: #fb8c00; color: white; }
+  
+  #estado { text-align: center; font-weight: bold; color: #d81b60; margin: 15px 0; min-height: 20px; }
+  
+  .table-container { margin-top: 40px; border-top: 2px solid #eee; padding-top: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+  th { background: #f5f5f5; color: #333; }
+
   #tempCanvas { display: none; }
 </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Extractor de Remitos Mejorado</h2>
+  <h2>Extractor de Remitos</h2>
+  
+  <div class="upload-section">
+    <input type="file" id="imageInput" accept="image/*" />
+    <button class="btn-process" onclick="procesarImagen()">1. LEER REMITO</button>
+  </div>
 
-  <input type="file" id="imageInput" accept="image/*" />
-  <button class="btn-process" onclick="procesarImagen()">Procesar imagen</button>
   <p id="estado"></p>
   <canvas id="tempCanvas"></canvas>
 
-  <div id="campos">
+  <div id="revision">
+    <p style="color: #666; font-size: 0.8em; text-align: center;">Revisa y corrige los datos antes de guardar:</p>
+    
     <label>Sr.(es) / Nombre</label>
-    <input type="text" id="nombre" placeholder="Esperando datos..." />
+    <input type="text" id="nombre" placeholder="Nombre detectado..." />
 
     <label>Domicilio</label>
-    <input type="text" id="domicilio" placeholder="Esperando datos..." />
+    <input type="text" id="domicilio" placeholder="Domicilio detectado..." />
 
     <label>Cuenta</label>
-    <input type="text" id="cuenta" placeholder="Esperando datos..." />
+    <input type="text" id="cuenta" placeholder="Nro de cuenta..." />
 
-    <label>Nro Remito</label>
-    <input type="text" id="remito" placeholder="Ej: 1101-00001234" />
+    <label>Nro Remito (Ej: 1101-00123)</label>
+    <input type="text" id="remito" placeholder="Número detectado..." />
 
-    <label>Fecha Registro</label>
+    <label>Fecha del Registro</label>
     <input type="date" id="fechaRegistro" />
 
-    <button class="btn-save" onclick="guardarRegistro()">Guardar registro</button>
+    <button class="btn-save" onclick="guardarRegistro()">2. GUARDAR REGISTRO ✅</button>
   </div>
-
-  <div class="flex-row">
-    <div>
-      <label>Filtrar desde</label>
-      <input type="date" id="fechaDesde" />
-    </div>
-    <div>
-      <label>Filtrar hasta</label>
-      <input type="date" id="fechaHasta" />
-    </div>
-  </div>
-  <button class="btn-excel" onclick="mostrarFiltrados()">Mostrar filtrados</button>
-  <button class="btn-excel" onclick="exportarExcelFiltrado()">Exportar a Excel filtrado</button>
 
   <div class="table-container">
-    <h3>Registros</h3>
+    <h3>Historial de hoy</h3>
+    <button class="btn-excel" onclick="exportarExcel()">3. EXPORTAR A EXCEL 📄</button>
     <table id="tabla">
       <thead>
         <tr>
           <th>Fecha</th>
           <th>Nombre</th>
-          <th>Domicilio</th>
-          <th>Cuenta</th>
           <th>Remito</th>
+          <th>Cuenta</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -90,187 +89,123 @@
 
 <script>
 let registros = [];
-
-// Inicializar fecha actual en el campo Fecha Registro
 document.getElementById('fechaRegistro').value = new Date().toISOString().split('T')[0];
 
 async function procesarImagen() {
-  const input = document.getElementById("imageInput");
-  if (!input.files.length) return alert("Selecciona una imagen primero.");
-  const file = input.files[0];
+  const file = document.getElementById("imageInput").files[0];
+  if (!file) return alert("Selecciona una foto.");
+
   const estado = document.getElementById("estado");
-  estado.innerText = "Procesando imagen...";
+  estado.innerText = "Limpiando imagen para mejor lectura...";
 
   const img = new Image();
   img.src = URL.createObjectURL(file);
   img.onload = async () => {
     const canvas = document.getElementById("tempCanvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.filter = "grayscale(100%) contrast(150%)";
-    ctx.drawImage(img, 0, 0);
+    
+    // Aumentamos escala para que las letras pequeñas se vean mejor
+    canvas.width = img.width * 1.5;
+    canvas.height = img.height * 1.5;
+    
+    // Filtros de imagen: Convertir a Blanco y Negro puro y subir contraste
+    ctx.filter = "grayscale(1) contrast(2) brightness(1.2)";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    estado.innerText = "Escaneando texto... (espera 10 seg)";
 
     try {
-      const { data: { text } } = await Tesseract.recognize(canvas, "spa", { logger: m => {} });
-      estado.innerText = "OCR completado, extrayendo datos...";
-      extraerDatos(text);
-      estado.innerText = "Datos listos para revisar";
+      const { data: { text } } = await Tesseract.recognize(canvas, "spa");
+      console.log("Texto detectado:", text); // Para ver en consola si falló
+      
+      analizarTexto(text);
+      estado.innerText = "¡Listo! Verifica los cuadros naranjas.";
     } catch (err) {
-      console.error(err);
-      estado.innerText = "Error en OCR";
+      estado.innerText = "Error al leer la imagen.";
     }
   };
 }
 
-function extraerDatos(texto) {
-  const lines = texto.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+function analizarTexto(rawText) {
+  const lines = rawText.split('\n').map(l => l.trim());
 
-  // Extraer Nro Remito: busca línea con patrón 1101-, 1104-, 0104-, 3008-
-  let remito = "";
-  for (let line of lines) {
-    let m = line.match(/(1101|1104|0104|3008)-\d+/);
-    if (m) {
-      remito = m[0];
-      break;
-    }
-  }
-  document.getElementById('remito').value = remito;
+  // --- BUSCAR REMITO ---
+  const nroMatch = rawText.match(/(1101|1104|0104|3008)[-\s]?\d+/);
+  document.getElementById('remito').value = nroMatch ? nroMatch[0] : "";
 
-  // Extraer Cuenta
-  let cuenta = "";
-  for (let line of lines) {
-    let m = line.match(/Cuenta[:\s]*([0-9]+)/i);
-    if (m) {
-      cuenta = m[1];
-      break;
-    }
-  }
-  document.getElementById('cuenta').value = cuenta;
+  // --- BUSCAR CUENTA ---
+  const ctaMatch = rawText.match(/(Cuenta|Cta|Cliente)[:\s]?(\d+)/i);
+  document.getElementById('cuenta').value = ctaMatch ? ctaMatch[2] : "";
 
-  // Extraer Sr.(es) / Nombre
-  let nombre = "";
-  for (let i=0; i<lines.length; i++) {
+  // --- BUSCAR NOMBRE (Sr. es) ---
+  let nombreEncontrado = "";
+  for (let i = 0; i < lines.length; i++) {
     if (/Sr(\.|\(es\))?/i.test(lines[i])) {
-      // Ejemplo: "Sr.(es): Randal Aldo Paul"
-      // Intentar extraer después de ":" o tomar la línea siguiente
-      let parts = lines[i].split(/Sr(\.|\(es\))?:?/i);
-      if (parts.length > 1 && parts[1].trim().length > 3) {
-        nombre = parts[1].trim();
+      // Intentamos sacar lo que está después de los dos puntos
+      let despuesDeSr = lines[i].split(/[:\.]/);
+      if (despuesDeSr.length > 1 && despuesDeSr[despuesDeSr.length-1].trim().length > 3) {
+        nombreEncontrado = despuesDeSr[despuesDeSr.length-1].trim();
       } else if (lines[i+1]) {
-        nombre = lines[i+1].trim();
+        // Si no hay nada al lado, el nombre suele estar abajo
+        nombreEncontrado = lines[i+1].trim();
       }
       break;
     }
   }
-  document.getElementById('nombre').value = nombre;
+  document.getElementById('nombre').value = nombreEncontrado;
 
-  // Extraer Domicilio (opcional)
-  let domicilio = "";
-  for (let line of lines) {
-    if (/Domicilio/i.test(line)) {
-      let parts = line.split(/Domicilio[:]?/i);
-      if(parts.length > 1) domicilio = parts[1].trim();
-      break;
-    }
-  }
-  document.getElementById('domicilio').value = domicilio;
+  // --- BUSCAR DOMICILIO ---
+  const domMatch = rawText.match(/Domicilio[:\s]?(.*)/i);
+  document.getElementById('domicilio').value = domMatch ? domMatch[1].trim() : "";
 }
 
 function guardarRegistro() {
-  const fecha = document.getElementById('fechaRegistro').value;
-  const nombre = document.getElementById('nombre').value.trim();
-  const domicilio = document.getElementById('domicilio').value.trim();
-  const cuenta = document.getElementById('cuenta').value.trim();
-  const remito = document.getElementById('remito').value.trim();
+  const data = {
+    fecha: document.getElementById('fechaRegistro').value,
+    nombre: document.getElementById('nombre').value.trim(),
+    domicilio: document.getElementById('domicilio').value.trim(),
+    cuenta: document.getElementById('cuenta').value.trim(),
+    remito: document.getElementById('remito').value.trim()
+  };
 
-  if(!nombre || !remito) return alert("Completa al menos Nombre y Remito");
+  if (!data.nombre || !data.remito) {
+    return alert("Por favor, corrige el nombre o el remito antes de guardar.");
+  }
 
-  registros.push({fecha,nombre,domicilio,cuenta,remito});
-  renderTabla(registros);
-
-  // Limpiar campos para nuevo registro
+  registros.push(data);
+  actualizarTabla();
+  
+  // Limpiar para el siguiente remito
   document.getElementById('nombre').value = "";
   document.getElementById('domicilio').value = "";
   document.getElementById('cuenta').value = "";
   document.getElementById('remito').value = "";
+  document.getElementById('imageInput').value = "";
+  document.getElementById('estado').innerText = "Registro guardado correctamente.";
 }
 
-function renderTabla(lista){
+function actualizarTabla() {
   const tbody = document.querySelector("#tabla tbody");
-  tbody.innerHTML="";
-  lista.forEach((item, index)=>{
-    const fila = tbody.insertRow();
-
-    // Fecha editable con input date
-    const celFecha = fila.insertCell();
-    celFecha.innerHTML = `<input type="date" value="${item.fecha}" style="width:130px" onchange="editarCampo(${index}, 'fecha', this.value)">`;
-
-    // Nombre editable contenteditable
-    const celNombre = fila.insertCell();
-    celNombre.contentEditable = "true";
-    celNombre.innerText = item.nombre;
-    celNombre.oninput = () => editarCampo(index, 'nombre', celNombre.innerText.trim());
-
-    // Domicilio editable contenteditable
-    const celDomicilio = fila.insertCell();
-    celDomicilio.contentEditable = "true";
-    celDomicilio.innerText = item.domicilio;
-    celDomicilio.oninput = () => editarCampo(index, 'domicilio', celDomicilio.innerText.trim());
-
-    // Cuenta editable contenteditable
-    const celCuenta = fila.insertCell();
-    celCuenta.contentEditable = "true";
-    celCuenta.innerText = item.cuenta;
-    celCuenta.oninput = () => editarCampo(index, 'cuenta', celCuenta.innerText.trim());
-
-    // Remito editable contenteditable
-    const celRemito = fila.insertCell();
-    celRemito.contentEditable = "true";
-    celRemito.innerText = item.remito;
-    celRemito.oninput = () => editarCampo(index, 'remito', celRemito.innerText.trim());
+  tbody.innerHTML = "";
+  registros.forEach(r => {
+    tbody.innerHTML += `<tr>
+      <td>${r.fecha}</td>
+      <td>${r.nombre}</td>
+      <td>${r.remito}</td>
+      <td>${r.cuenta}</td>
+    </tr>`;
   });
 }
 
-function editarCampo(index, campo, valor) {
-  registros[index][campo] = valor;
-}
-
-function mostrarFiltrados(){
-  const desde = document.getElementById('fechaDesde').value;
-  const hasta = document.getElementById('fechaHasta').value;
-  if(!desde || !hasta) return alert("Selecciona ambas fechas para filtrar");
-
-  if(hasta < desde) return alert("La fecha hasta debe ser igual o mayor a la fecha desde");
-
-  const filtrados = registros.filter(r=>{
-    return r.fecha >= desde && r.fecha <= hasta;
-  });
-
-  renderTabla(filtrados);
-}
-
-function exportarExcelFiltrado(){
-  const tbody = document.querySelector("#tabla tbody");
-  const filas = Array.from(tbody.rows);
-  if(filas.length === 0) return alert("No hay datos para exportar");
-
-  const datos = filas.map(f=>{
-    return {
-      Fecha: f.cells[0].querySelector("input").value,
-      Nombre: f.cells[1].innerText.trim(),
-      Domicilio: f.cells[2].innerText.trim(),
-      Cuenta: f.cells[3].innerText.trim(),
-      Remito: f.cells[4].innerText.trim()
-    };
-  });
-
-  const ws = XLSX.utils.json_to_sheet(datos);
+function exportarExcel() {
+  if (registros.length === 0) return alert("No hay datos para exportar.");
+  const ws = XLSX.utils.json_to_sheet(registros);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Remitos");
-  XLSX.writeFile(wb, "Remitos.xlsx");
+  XLSX.writeFile(wb, "Reporte_Remitos.xlsx");
 }
 </script>
 
 </body>
 </html>
+
