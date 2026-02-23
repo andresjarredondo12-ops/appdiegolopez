@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Mejorado</title>
+<title>Extractor de Remitos Mejorado</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -91,7 +91,7 @@
 <script>
 let registros = [];
 
-// Inicializar fecha actual
+// Inicializar fecha actual en el campo Fecha Registro
 document.getElementById('fechaRegistro').value = new Date().toISOString().split('T')[0];
 
 async function procesarImagen() {
@@ -126,28 +126,55 @@ async function procesarImagen() {
 function extraerDatos(texto) {
   const lines = texto.split('\n').map(l => l.trim()).filter(l => l.length > 2);
 
-  // Remito
-  const remitoMatch = texto.match(/\b(1101|1104|0104|3008)-\d+\b/);
-  document.getElementById('remito').value = remitoMatch ? remitoMatch[0] : "";
+  // Extraer Nro Remito: busca línea con patrón 1101-, 1104-, 0104-, 3008-
+  let remito = "";
+  for (let line of lines) {
+    let m = line.match(/(1101|1104|0104|3008)-\d+/);
+    if (m) {
+      remito = m[0];
+      break;
+    }
+  }
+  document.getElementById('remito').value = remito;
 
-  // Cuenta
-  const cuentaMatch = texto.match(/(Cuenta|Cta|Cliente)[:\s]?(\d+)/i);
-  document.getElementById('cuenta').value = cuentaMatch ? cuentaMatch[2] : "";
+  // Extraer Cuenta
+  let cuenta = "";
+  for (let line of lines) {
+    let m = line.match(/Cuenta[:\s]*([0-9]+)/i);
+    if (m) {
+      cuenta = m[1];
+      break;
+    }
+  }
+  document.getElementById('cuenta').value = cuenta;
 
-  // Nombre
+  // Extraer Sr.(es) / Nombre
   let nombre = "";
-  for (let i=0;i<lines.length;i++){
-    if (/Sr/i.test(lines[i])){
-      nombre = lines[i].replace(/Sr(\.|\(es\))?/i,"").replace(/[:\.\-]/g,"").trim();
-      if(nombre.length<3 && lines[i+1]) nombre = lines[i+1].trim();
+  for (let i=0; i<lines.length; i++) {
+    if (/Sr(\.|\(es\))?/i.test(lines[i])) {
+      // Ejemplo: "Sr.(es): Randal Aldo Paul"
+      // Intentar extraer después de ":" o tomar la línea siguiente
+      let parts = lines[i].split(/Sr(\.|\(es\))?:?/i);
+      if (parts.length > 1 && parts[1].trim().length > 3) {
+        nombre = parts[1].trim();
+      } else if (lines[i+1]) {
+        nombre = lines[i+1].trim();
+      }
       break;
     }
   }
   document.getElementById('nombre').value = nombre;
 
-  // Domicilio
-  const domMatch = texto.match(/Domicilio[:\s]?(.*)/i);
-  document.getElementById('domicilio').value = domMatch ? domMatch[1].trim() : "";
+  // Extraer Domicilio (opcional)
+  let domicilio = "";
+  for (let line of lines) {
+    if (/Domicilio/i.test(line)) {
+      let parts = line.split(/Domicilio[:]?/i);
+      if(parts.length > 1) domicilio = parts[1].trim();
+      break;
+    }
+  }
+  document.getElementById('domicilio').value = domicilio;
 }
 
 function guardarRegistro() {
@@ -162,32 +189,62 @@ function guardarRegistro() {
   registros.push({fecha,nombre,domicilio,cuenta,remito});
   renderTabla(registros);
 
-  document.getElementById('nombre').value="";
-  document.getElementById('domicilio').value="";
-  document.getElementById('cuenta').value="";
-  document.getElementById('remito').value="";
+  // Limpiar campos para nuevo registro
+  document.getElementById('nombre').value = "";
+  document.getElementById('domicilio').value = "";
+  document.getElementById('cuenta').value = "";
+  document.getElementById('remito').value = "";
 }
 
 function renderTabla(lista){
   const tbody = document.querySelector("#tabla tbody");
   tbody.innerHTML="";
-  lista.forEach(item=>{
+  lista.forEach((item, index)=>{
     const fila = tbody.insertRow();
-    const celFecha = fila.insertCell(); celFecha.innerHTML=`<input type="date" value="${item.fecha}" style="width:120px">`;
-    const celNombre = fila.insertCell(); celNombre.contentEditable="true"; celNombre.innerText=item.nombre;
-    const celDomicilio = fila.insertCell(); celDomicilio.contentEditable="true"; celDomicilio.innerText=item.domicilio;
-    const celCuenta = fila.insertCell(); celCuenta.contentEditable="true"; celCuenta.innerText=item.cuenta;
-    const celRemito = fila.insertCell(); celRemito.contentEditable="true"; celRemito.innerText=item.remito;
+
+    // Fecha editable con input date
+    const celFecha = fila.insertCell();
+    celFecha.innerHTML = `<input type="date" value="${item.fecha}" style="width:130px" onchange="editarCampo(${index}, 'fecha', this.value)">`;
+
+    // Nombre editable contenteditable
+    const celNombre = fila.insertCell();
+    celNombre.contentEditable = "true";
+    celNombre.innerText = item.nombre;
+    celNombre.oninput = () => editarCampo(index, 'nombre', celNombre.innerText.trim());
+
+    // Domicilio editable contenteditable
+    const celDomicilio = fila.insertCell();
+    celDomicilio.contentEditable = "true";
+    celDomicilio.innerText = item.domicilio;
+    celDomicilio.oninput = () => editarCampo(index, 'domicilio', celDomicilio.innerText.trim());
+
+    // Cuenta editable contenteditable
+    const celCuenta = fila.insertCell();
+    celCuenta.contentEditable = "true";
+    celCuenta.innerText = item.cuenta;
+    celCuenta.oninput = () => editarCampo(index, 'cuenta', celCuenta.innerText.trim());
+
+    // Remito editable contenteditable
+    const celRemito = fila.insertCell();
+    celRemito.contentEditable = "true";
+    celRemito.innerText = item.remito;
+    celRemito.oninput = () => editarCampo(index, 'remito', celRemito.innerText.trim());
   });
+}
+
+function editarCampo(index, campo, valor) {
+  registros[index][campo] = valor;
 }
 
 function mostrarFiltrados(){
   const desde = document.getElementById('fechaDesde').value;
   const hasta = document.getElementById('fechaHasta').value;
-  if(!desde || !hasta) return alert("Selecciona ambas fechas");
+  if(!desde || !hasta) return alert("Selecciona ambas fechas para filtrar");
+
+  if(hasta < desde) return alert("La fecha hasta debe ser igual o mayor a la fecha desde");
 
   const filtrados = registros.filter(r=>{
-    return r.fecha>=desde && r.fecha<=hasta;
+    return r.fecha >= desde && r.fecha <= hasta;
   });
 
   renderTabla(filtrados);
@@ -196,7 +253,7 @@ function mostrarFiltrados(){
 function exportarExcelFiltrado(){
   const tbody = document.querySelector("#tabla tbody");
   const filas = Array.from(tbody.rows);
-  if(filas.length==0) return alert("No hay datos para exportar");
+  if(filas.length === 0) return alert("No hay datos para exportar");
 
   const datos = filas.map(f=>{
     return {
