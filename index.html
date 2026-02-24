@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Estable</title>
+<title>Extractor de Remitos - Versión Precisa</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -113,51 +113,48 @@ console.error(error);
 
 function extraerInformacion(texto) {
 
-const lineas = texto.split("\n")
-.map(l => l.trim())
-.filter(l => l.length > 3);
+const lineas = texto.split("\n").map(l => l.trim());
 
-let cuenta = "";
 let nombre = "";
+let cuenta = "";
 let remito = "";
 
-// RECORREMOS LÍNEAS
 for (let linea of lineas) {
 
-// ---- CUENTA ----
-if (/Cuenta/i.test(linea)) {
-let matchCuenta = linea.match(/\d{4,12}/);
-if (matchCuenta) cuenta = matchCuenta[0];
-continue; // ESTA LINEA NO PUEDE SER NOMBRE
+if (/Sr\.?\(?es\)?/i.test(linea)) {
+
+  // Eliminamos "Sr.(es)"
+  let limpia = linea.replace(/Sr\.?\(?es\)?/i, "").trim();
+
+  // Dividir por 4 o más espacios
+  let partes = limpia.split(/\s{4,}/);
+
+  if (partes.length >= 1) {
+    nombre = partes[0].trim();
+  }
+
+  // Buscar número largo en la misma línea (cuenta)
+  let matchCuenta = linea.match(/\d{4,12}/);
+  if (matchCuenta) {
+    cuenta = matchCuenta[0];
+  }
+
+  continue;
 }
 
-// ---- REMITO ----
+// REMITO
 if (!remito) {
-let matchRemito = linea.match(/\b(1101|1104|0104|3008)[-\s]?\d+\b/);
-if (matchRemito) {
-remito = matchRemito[0];
-continue;
-}
-}
-
-// ---- NOMBRE ----
-if (!nombre) {
-if (!/Cuenta|Remito|Fecha|Factura|IVA|Total/i.test(linea)) {
-
-if (/Sr|Señor|Cliente/i.test(linea)) {
-nombre = linea.replace(/Sr\.?|Señor|Cliente|:/gi, "").trim();
-} 
-else if (/^[A-ZÁÉÍÓÚÑ\s]{5,}$/.test(linea)) {
-nombre = linea.trim();
-}
-}
+  let matchRemito = linea.match(/\b(1101|1104|0104|3008)[-\s]?\d+\b/);
+  if (matchRemito) {
+    remito = matchRemito[0];
+  }
 }
 
 }
 
+document.getElementById("nombre").value = nombre;
 document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
-document.getElementById("nombre").value = nombre;
 }
 
 function guardarEnTabla() {
@@ -214,4 +211,3 @@ XLSX.writeFile(wb, "Registros_Remitos.xlsx");
 
 </body>
 </html>
-
