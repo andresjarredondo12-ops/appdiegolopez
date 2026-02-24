@@ -96,30 +96,37 @@ th { background:#f1f1f1; }
 </div>
 
 <script>
-let baseDatos = {};
+let baseDatos = JSON.parse(localStorage.getItem("remitosData")) || {};
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
+
+function guardarStorage(){
+localStorage.setItem("remitosData", JSON.stringify(baseDatos));
+}
+
+function limpiarAntiguos(){
+const hoy = new Date();
+for (let deposito in baseDatos){
+for (let fecha in baseDatos[deposito]){
+const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
+if (diferencia > 7){
+delete baseDatos[deposito][fecha];
+}
+}
+}
+guardarStorage();
+}
+
+window.onload = function(){
+limpiarAntiguos();
+actualizarTabla();
+};
 
 function limpiarNombre(texto) {
 return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
-/* =========================
-   LIMPIEZA AUTOMÁTICA 7 DÍAS
-========================= */
-function limpiarRegistrosAntiguos() {
-const hoy = new Date();
-for (let deposito in baseDatos) {
-for (let fecha in baseDatos[deposito]) {
-const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
-if (diferencia > 7) {
-delete baseDatos[deposito][fecha];
-}
-}
-}
-}
-/* ========================= */
-
+/* ======== OCR ORIGINAL SIN TOCAR ======== */
 async function ejecutarLectura() {
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
@@ -175,10 +182,11 @@ document.getElementById("nombre").value = nombre;
 document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
 }
+/* ======================================== */
 
 function guardarRegistro() {
 
-limpiarRegistrosAntiguos(); // 👈 limpieza automática
+limpiarAntiguos();
 
 const fecha = document.getElementById("fechaReg").value;
 const deposito = document.getElementById("deposito").value;
@@ -200,10 +208,33 @@ if (!baseDatos[deposito]) baseDatos[deposito]={};
 if (!baseDatos[deposito][fecha]) baseDatos[deposito][fecha]=[];
 
 baseDatos[deposito][fecha].push({nombre,cuenta,remito});
+guardarStorage();
 actualizarTabla();
 }
 
-function actualizarTabla() {
+function borrarRegistro(index){
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+baseDatos[deposito][fecha].splice(index,1);
+guardarStorage();
+actualizarTabla();
+}
+
+function borrarArchivoDia(){
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+
+if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
+return alert("No hay registros");
+
+if (confirm("¿Seguro que querés borrar todos los registros del día?")){
+delete baseDatos[deposito][fecha];
+guardarStorage();
+actualizarTabla();
+}
+}
+
+function actualizarTabla(){
 const deposito = document.getElementById("deposito").value;
 const fecha = document.getElementById("fechaReg").value;
 
@@ -225,42 +256,21 @@ tbody.innerHTML+=`
 });
 }
 
-function borrarRegistro(index) {
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-baseDatos[deposito][fecha].splice(index,1);
-actualizarTabla();
-}
-
-function borrarArchivoDia() {
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-
-if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
-return alert("No hay registros para borrar");
-
-if (confirm("¿Seguro que querés borrar todos los registros del día?")) {
-delete baseDatos[deposito][fecha];
-actualizarTabla();
-}
-}
-
-function verRango() {
+function verRango(){
 const deposito = document.getElementById("deposito").value;
 const desde = document.getElementById("fechaDesde").value;
 const hasta = document.getElementById("fechaHasta").value;
 
 if (!desde || !hasta) return alert("Selecciona rango");
-if (desde > hasta) return alert("Rango incorrecto");
 
 const tbody = document.querySelector("#tablaRegistros tbody");
 tbody.innerHTML="";
 
 if (!baseDatos[deposito]) return;
 
-for (let fecha in baseDatos[deposito]) {
-if (fecha >= desde && fecha <= hasta) {
-baseDatos[deposito][fecha].forEach((r,i)=>{
+for (let fecha in baseDatos[deposito]){
+if (fecha >= desde && fecha <= hasta){
+baseDatos[deposito][fecha].forEach(r=>{
 tbody.innerHTML+=`
 <tr>
 <td>${fecha}</td>
@@ -275,7 +285,7 @@ tbody.innerHTML+=`
 }
 }
 
-function exportarDia() {
+function exportarDia(){
 const deposito = document.getElementById("deposito").value;
 const fecha = document.getElementById("fechaReg").value;
 
@@ -297,3 +307,4 @@ XLSX.writeFile(wb, nombreArchivo);
 
 </body>
 </html>
+
