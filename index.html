@@ -19,14 +19,14 @@ button { padding:8px 12px; margin-top:10px; border:none; border-radius:5px; font
 .btn-green { background:#28a745; color:white; width:100%; }
 .btn-orange { background:#fd7e14; color:white; }
 .btn-red { background:#dc3545; color:white; }
-.flex { display:flex; gap:10px; }
-.flex div { flex:1; }
 table { width:100%; border-collapse:collapse; margin-top:20px; }
 th, td { border:1px solid #ddd; padding:8px; text-align:center; }
 th { background:#f1f1f1; }
 #estado { text-align:center; font-weight:bold; }
 #tempCanvas { display:none; }
 .filtro { background:#f8f9fa; padding:15px; border-radius:8px; margin-top:20px; }
+.flex { display:flex; gap:10px; }
+.flex div { flex:1; }
 </style>
 </head>
 <body>
@@ -43,7 +43,7 @@ th { background:#f1f1f1; }
 <canvas id="tempCanvas"></canvas>
 
 <label>Depósito</label>
-<select id="deposito">
+<select id="deposito" onchange="actualizarTabla()">
 <option value="santafe">Depósito Santa Fe</option>
 <option value="bsas">Depósito Buenos Aires</option>
 </select>
@@ -58,10 +58,26 @@ th { background:#f1f1f1; }
 <input type="text" id="remito" />
 
 <label>Fecha</label>
-<input type="date" id="fechaReg" onchange="cargarRegistrosDelDia()" />
+<input type="date" id="fechaReg" onchange="actualizarTabla()" />
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
 <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
+<button class="btn-red" onclick="borrarArchivoDia()">BORRAR ARCHIVO</button>
+
+<div class="filtro">
+<h3>Ver por Rango de Fechas</h3>
+<div class="flex">
+<div>
+<label>Desde</label>
+<input type="date" id="fechaDesde">
+</div>
+<div>
+<label>Hasta</label>
+<input type="date" id="fechaHasta">
+</div>
+</div>
+<button class="btn-orange" onclick="verRango()">VER RANGO</button>
+</div>
 
 <table id="tablaRegistros">
 <thead>
@@ -81,16 +97,28 @@ th { background:#f1f1f1; }
 
 <script>
 let baseDatos = {};
-let vistaActual = {};
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
 function limpiarNombre(texto) {
-return texto
-.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"")
-.replace(/\s+/g," ")
-.trim();
+return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
+
+/* =========================
+   LIMPIEZA AUTOMÁTICA 7 DÍAS
+========================= */
+function limpiarRegistrosAntiguos() {
+const hoy = new Date();
+for (let deposito in baseDatos) {
+for (let fecha in baseDatos[deposito]) {
+const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
+if (diferencia > 7) {
+delete baseDatos[deposito][fecha];
+}
+}
+}
+}
+/* ========================= */
 
 async function ejecutarLectura() {
 const file = document.getElementById('imageInput').files[0];
@@ -113,7 +141,7 @@ ctx.filter = "grayscale(1) contrast(1.8)";
 ctx.drawImage(img, 0, 0);
 
 const result = await Tesseract.recognize(canvas, "spa", {
-  tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
+tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
 });
 
 extraerInformacion(result.data.text);
@@ -149,6 +177,9 @@ document.getElementById("remito").value = remito;
 }
 
 function guardarRegistro() {
+
+limpiarRegistrosAntiguos(); // 👈 limpieza automática
+
 const fecha = document.getElementById("fechaReg").value;
 const deposito = document.getElementById("deposito").value;
 const nombre = document.getElementById("nombre").value;
@@ -199,6 +230,49 @@ const deposito = document.getElementById("deposito").value;
 const fecha = document.getElementById("fechaReg").value;
 baseDatos[deposito][fecha].splice(index,1);
 actualizarTabla();
+}
+
+function borrarArchivoDia() {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+
+if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
+return alert("No hay registros para borrar");
+
+if (confirm("¿Seguro que querés borrar todos los registros del día?")) {
+delete baseDatos[deposito][fecha];
+actualizarTabla();
+}
+}
+
+function verRango() {
+const deposito = document.getElementById("deposito").value;
+const desde = document.getElementById("fechaDesde").value;
+const hasta = document.getElementById("fechaHasta").value;
+
+if (!desde || !hasta) return alert("Selecciona rango");
+if (desde > hasta) return alert("Rango incorrecto");
+
+const tbody = document.querySelector("#tablaRegistros tbody");
+tbody.innerHTML="";
+
+if (!baseDatos[deposito]) return;
+
+for (let fecha in baseDatos[deposito]) {
+if (fecha >= desde && fecha <= hasta) {
+baseDatos[deposito][fecha].forEach((r,i)=>{
+tbody.innerHTML+=`
+<tr>
+<td>${fecha}</td>
+<td>${deposito}</td>
+<td>${r.nombre}</td>
+<td>${r.cuenta}</td>
+<td>${r.remito}</td>
+<td>-</td>
+</tr>`;
+});
+}
+}
 }
 
 function exportarDia() {
