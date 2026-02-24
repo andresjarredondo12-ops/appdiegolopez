@@ -3,23 +3,24 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Base por Día</title>
+<title>Extractor de Remitos - Profesional</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
 body { font-family: Arial; padding:20px; background:#f4f4f9; }
-.container { max-width:900px; margin:auto; background:white; padding:20px; border-radius:10px; }
+.container { max-width:1000px; margin:auto; background:white; padding:20px; border-radius:10px; }
 .upload-box { background:#e7f3ff; border:2px dashed #007bff; padding:20px; text-align:center; border-radius:8px; margin-bottom:20px; }
 label { font-weight:bold; display:block; margin-top:15px; }
 input { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px; }
-button { width:100%; padding:10px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
-.btn-blue { background:#007bff; color:white; }
-.btn-green { background:#28a745; color:white; }
-.btn-orange { background:#fd7e14; color:white; }
+button { padding:8px 12px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
+.btn-blue { background:#007bff; color:white; width:100%; }
+.btn-green { background:#28a745; color:white; width:100%; }
+.btn-orange { background:#fd7e14; color:white; width:100%; }
+.btn-red { background:#dc3545; color:white; }
 table { width:100%; border-collapse:collapse; margin-top:20px; }
-th, td { border:1px solid #ddd; padding:8px; }
+th, td { border:1px solid #ddd; padding:8px; text-align:center; }
 th { background:#f1f1f1; }
 #estado { text-align:center; font-weight:bold; }
 #tempCanvas { display:none; }
@@ -51,8 +52,8 @@ th { background:#f1f1f1; }
 <input type="date" id="fechaReg" onchange="cargarRegistrosDelDia()" />
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
-
 <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA ACTUAL</button>
+<button class="btn-red" onclick="borrarDiaCompleto()">BORRAR TODOS LOS REGISTROS DEL DÍA</button>
 
 <table id="tablaRegistros">
 <thead>
@@ -60,6 +61,7 @@ th { background:#f1f1f1; }
 <th>Nombre</th>
 <th>Cuenta</th>
 <th>Remito</th>
+<th>Acción</th>
 </tr>
 </thead>
 <tbody></tbody>
@@ -92,9 +94,7 @@ const hoy = new Date();
 for (let fecha in baseDatos) {
 const fechaObj = new Date(fecha);
 const diferencia = (hoy - fechaObj) / (1000 * 60 * 60 * 24);
-if (diferencia > 7) {
-delete baseDatos[fecha];
-}
+if (diferencia > 7) delete baseDatos[fecha];
 }
 guardarEnStorage();
 }
@@ -117,7 +117,6 @@ const img = new Image();
 img.src = URL.createObjectURL(file);
 
 img.onload = async () => {
-
 const canvas = document.getElementById("tempCanvas");
 const ctx = canvas.getContext("2d");
 canvas.width = img.width * 1.4;
@@ -132,6 +131,13 @@ estado.innerText = "Lectura finalizada ✔";
 };
 }
 
+function limpiarNombre(texto) {
+return texto
+.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, "") // solo letras
+.replace(/\s+/g, " ")
+.trim();
+}
+
 function extraerInformacion(texto) {
 
 const lineas = texto.split("\n").map(l => l.trim());
@@ -141,11 +147,18 @@ let nombre="", cuenta="", remito="";
 for (let linea of lineas) {
 
 if (/Sr\.?\(?es\)?/i.test(linea)) {
+
 let limpia = linea.replace(/Sr\.?\(?es\)?/i, "").trim();
+
 let partes = limpia.split(/\s{4,}/);
-if (partes.length >= 1) nombre = partes[0].trim();
+
+if (partes.length >= 1) {
+nombre = limpiarNombre(partes[0]);
+}
+
 let matchCuenta = linea.match(/\d{4,12}/);
 if (matchCuenta) cuenta = matchCuenta[0];
+
 continue;
 }
 
@@ -163,10 +176,7 @@ document.getElementById("remito").value = remito;
 function guardarRegistro() {
 
 const fecha = document.getElementById("fechaReg").value;
-
-if (!baseDatos[fecha]) {
-baseDatos[fecha] = [];
-}
+if (!baseDatos[fecha]) baseDatos[fecha] = [];
 
 const nuevo = {
 nombre: document.getElementById("nombre").value,
@@ -177,20 +187,37 @@ remito: document.getElementById("remito").value
 if (!nuevo.nombre && !nuevo.remito) return alert("Datos insuficientes");
 
 baseDatos[fecha].push(nuevo);
-
 guardarEnStorage();
 cargarRegistrosDelDia();
+}
+
+function borrarRegistro(index) {
+const fecha = document.getElementById("fechaReg").value;
+baseDatos[fecha].splice(index, 1);
+guardarEnStorage();
+cargarRegistrosDelDia();
+}
+
+function borrarDiaCompleto() {
+const fecha = document.getElementById("fechaReg").value;
+if (!baseDatos[fecha]) return;
+if (confirm("¿Seguro que querés borrar todos los registros de este día?")) {
+delete baseDatos[fecha];
+guardarEnStorage();
+cargarRegistrosDelDia();
+}
 }
 
 function actualizarTabla(datos) {
 const tbody = document.querySelector("#tablaRegistros tbody");
 tbody.innerHTML = "";
-datos.forEach(r => {
+datos.forEach((r, index) => {
 tbody.innerHTML += `
 <tr>
 <td>${r.nombre}</td>
 <td>${r.cuenta}</td>
 <td>${r.remito}</td>
+<td><button class="btn-red" onclick="borrarRegistro(${index})">🗑</button></td>
 </tr>`;
 });
 }
@@ -212,4 +239,3 @@ XLSX.writeFile(wb, "Remitos_" + fecha + ".xlsx");
 
 </body>
 </html>
-
