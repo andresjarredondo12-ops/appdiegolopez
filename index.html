@@ -97,12 +97,15 @@ th { background:#f1f1f1; }
 
 <script>
 
-const STORAGE_KEY = "remitosData_" + window.location.pathname;
+/* ==== STORAGE ESTABLE ==== */
+const STORAGE_KEY = "remitosData_appdiegolopez_v1";
 let baseDatos = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 
 function guardarStorage(){
 localStorage.setItem(STORAGE_KEY, JSON.stringify(baseDatos));
 }
+
+/* ==== RESTO DE TU LÓGICA ORIGINAL ==== */
 
 function guardarEstado(){
 localStorage.setItem("depositoSeleccionado", document.getElementById("deposito").value);
@@ -133,8 +136,9 @@ function limpiarNombre(texto) {
 return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
-/* ===== OCR ===== */
+/* ==== OCR ARREGLADO ==== */
 async function ejecutarLectura() {
+
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
 
@@ -145,25 +149,35 @@ const img = new Image();
 img.src = URL.createObjectURL(file);
 
 img.onload = async () => {
+
 const canvas = document.getElementById("tempCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = img.width;
 canvas.height = img.height;
 
-ctx.filter = "grayscale(1) contrast(1.8)";
+ctx.filter = "grayscale(1) contrast(2)";
 ctx.drawImage(img, 0, 0);
 
-const result = await Tesseract.recognize(canvas, "spa", {
-tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
-});
+try {
 
-extraerInformacion(result.data.text);
+const worker = await Tesseract.createWorker("spa");
+const { data } = await worker.recognize(canvas);
+await worker.terminate();
+
+extraerInformacion(data.text);
 estado.innerText = "Lectura finalizada ✔";
+
+} catch (error) {
+console.error(error);
+estado.innerText = "Error procesando imagen";
+}
+
 };
 }
 
 function extraerInformacion(texto) {
+
 const lineas = texto.split("\n").map(l => l.trim());
 let nombre="", cuenta="", remito="";
 
@@ -181,17 +195,21 @@ if (matchCuenta) cuenta = matchCuenta[0];
 
 if (!remito) {
 let matchRemito = linea.match(/\b(1101|1104|0104|3008|1107|3009)[-\s]?\d+\b/);
-if (matchRemito) remito = matchRemito[0];
+if (matchRemito) {
+let limpio = matchRemito[0].replace(/\s+/g,"-");
+let partes = limpio.split("-");
+if(partes.length===2){
+remito = partes[0]+"-"+partes[1];
 }
+}
+}
+
 }
 
 document.getElementById("nombre").value = nombre;
 document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
 }
-
-/* TODO el resto de tus funciones (guardarRegistro, borrarRegistro, etc.)
-van exactamente igual que tu versión original */
 
 </script>
 
