@@ -43,7 +43,7 @@ th { background:#f1f1f1; }
 <canvas id="tempCanvas"></canvas>
 
 <label>Depósito</label>
-<select id="deposito" onchange="actualizarTabla()">
+<select id="deposito" onchange="guardarEstado(); actualizarTabla();">
 <option value="santafe">Depósito Santa Fe</option>
 <option value="bsas">Depósito Buenos Aires</option>
 </select>
@@ -58,7 +58,7 @@ th { background:#f1f1f1; }
 <input type="text" id="remito" />
 
 <label>Fecha</label>
-<input type="date" id="fechaReg" onchange="actualizarTabla()" />
+<input type="date" id="fechaReg" onchange="guardarEstado(); actualizarTabla();" />
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
 <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
@@ -98,27 +98,32 @@ th { background:#f1f1f1; }
 <script>
 let baseDatos = JSON.parse(localStorage.getItem("remitosData")) || {};
 
-document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
-
 function guardarStorage(){
 localStorage.setItem("remitosData", JSON.stringify(baseDatos));
 }
 
-function limpiarAntiguos(){
-const hoy = new Date();
-for (let deposito in baseDatos){
-for (let fecha in baseDatos[deposito]){
-const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
-if (diferencia > 7){
-delete baseDatos[deposito][fecha];
+function guardarEstado(){
+localStorage.setItem("depositoSeleccionado", document.getElementById("deposito").value);
+localStorage.setItem("fechaSeleccionada", document.getElementById("fechaReg").value);
 }
+
+function restaurarEstado(){
+const depositoGuardado = localStorage.getItem("depositoSeleccionado");
+const fechaGuardada = localStorage.getItem("fechaSeleccionada");
+
+if(depositoGuardado){
+document.getElementById("deposito").value = depositoGuardado;
 }
+
+if(fechaGuardada){
+document.getElementById("fechaReg").value = fechaGuardada;
+}else{
+document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 }
-guardarStorage();
 }
 
 window.onload = function(){
-limpiarAntiguos();
+restaurarEstado();
 actualizarTabla();
 };
 
@@ -126,7 +131,7 @@ function limpiarNombre(texto) {
 return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
-/* ======== OCR ORIGINAL SIN TOCAR ======== */
+/* ======== TODO TU OCR ORIGINAL SIN MODIFICAR ======== */
 async function ejecutarLectura() {
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
@@ -182,11 +187,9 @@ document.getElementById("nombre").value = nombre;
 document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
 }
-/* ======================================== */
+/* ===================================================== */
 
 function guardarRegistro() {
-
-limpiarAntiguos();
 
 const fecha = document.getElementById("fechaReg").value;
 const deposito = document.getElementById("deposito").value;
@@ -209,6 +212,7 @@ if (!baseDatos[deposito][fecha]) baseDatos[deposito][fecha]=[];
 
 baseDatos[deposito][fecha].push({nombre,cuenta,remito});
 guardarStorage();
+guardarEstado();
 actualizarTabla();
 }
 
