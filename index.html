@@ -26,7 +26,6 @@ th, td { border:1px solid #ddd; padding:8px; text-align:center; }
 th { background:#f1f1f1; }
 #estado { text-align:center; font-weight:bold; }
 #tempCanvas { display:none; }
-.filtro { background:#f8f9fa; padding:15px; border-radius:8px; margin-top:20px; }
 </style>
 </head>
 <body>
@@ -43,7 +42,7 @@ th { background:#f1f1f1; }
 <canvas id="tempCanvas"></canvas>
 
 <label>Depósito</label>
-<select id="deposito">
+<select id="deposito" onchange="actualizarTabla()">
 <option value="santafe">Depósito Santa Fe</option>
 <option value="bsas">Depósito Buenos Aires</option>
 </select>
@@ -58,10 +57,11 @@ th { background:#f1f1f1; }
 <input type="text" id="remito" />
 
 <label>Fecha</label>
-<input type="date" id="fechaReg" onchange="cargarRegistrosDelDia()" />
+<input type="date" id="fechaReg" onchange="actualizarTabla()" />
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
 <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
+<button class="btn-red" onclick="borrarArchivoDia()">BORRAR ARCHIVO</button>
 
 <table id="tablaRegistros">
 <thead>
@@ -81,7 +81,6 @@ th { background:#f1f1f1; }
 
 <script>
 let baseDatos = {};
-let vistaActual = {};
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
@@ -172,6 +171,26 @@ baseDatos[deposito][fecha].push({nombre,cuenta,remito});
 actualizarTabla();
 }
 
+function borrarRegistro(index) {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+baseDatos[deposito][fecha].splice(index,1);
+actualizarTabla();
+}
+
+function borrarArchivoDia() {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+
+if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
+return alert("No hay registros para borrar");
+
+if (confirm("¿Seguro que querés borrar todo el archivo del día seleccionado?")) {
+delete baseDatos[deposito][fecha];
+actualizarTabla();
+}
+}
+
 function actualizarTabla() {
 const deposito = document.getElementById("deposito").value;
 const fecha = document.getElementById("fechaReg").value;
@@ -192,13 +211,6 @@ tbody.innerHTML+=`
 <td><button class="btn-red" onclick="borrarRegistro(${i})">🗑</button></td>
 </tr>`;
 });
-}
-
-function borrarRegistro(index) {
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-baseDatos[deposito][fecha].splice(index,1);
-actualizarTabla();
 }
 
 function exportarDia() {
@@ -223,4 +235,3 @@ XLSX.writeFile(wb, nombreArchivo);
 
 </body>
 </html>
-
