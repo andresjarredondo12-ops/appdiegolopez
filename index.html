@@ -218,25 +218,58 @@ function verRango() {
 const desde = document.getElementById("fechaDesde").value;
 const hasta = document.getElementById("fechaHasta").value;
 if (!desde || !hasta) return alert("Selecciona rango");
+if (desde > hasta) return alert("La fecha DESDE no puede ser mayor que HASTA");
 
 vistaActual = [];
-
 for (let fecha in baseDatos) {
 if (fecha >= desde && fecha <= hasta) {
-baseDatos[fecha].forEach(r => {
-vistaActual.push({...r, fecha});
+baseDatos[fecha].forEach(r=>{
+vistaActual.push({fecha:fecha,nombre:r.nombre,cuenta:r.cuenta,remito:r.remito});
+});
+}
+}
+if(vistaActual.length===0) alert("No hay registros en ese rango");
+actualizarTabla();
+}
+
+function exportarDia() {
+const fecha = document.getElementById("fechaReg").value;
+const registros = baseDatos[fecha];
+if (!registros || registros.length===0) return alert("No hay registros ese día");
+const ws = XLSX.utils.json_to_sheet(registros);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, fecha);
+XLSX.writeFile(wb, "Remitos_"+fecha+".xlsx");
+}
+
+function exportarRango() {
+const desde = document.getElementById("fechaDesde").value;
+const hasta = document.getElementById("fechaHasta").value;
+if (!desde || !hasta) return alert("Selecciona rango");
+if (desde > hasta) return alert("La fecha DESDE no puede ser mayor que HASTA");
+
+let datosExportar = [];
+for (let fecha in baseDatos) {
+if (fecha >= desde && fecha <= hasta) {
+baseDatos[fecha].forEach(r=>{
+datosExportar.push({fecha:fecha,nombre:r.nombre,cuenta:r.cuenta,remito:r.remito});
 });
 }
 }
 
-actualizarTabla();
+if(datosExportar.length===0) return alert("No hay registros en ese rango");
+
+const ws = XLSX.utils.json_to_sheet(datosExportar);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, "Rango");
+XLSX.writeFile(wb, `Remitos_${desde}_al_${hasta}.xlsx`);
 }
 
 function actualizarTabla() {
 const tbody = document.querySelector("#tablaRegistros tbody");
 tbody.innerHTML="";
 vistaActual.forEach((r,i)=>{
-tbody.innerHTML += `
+tbody.innerHTML+=`
 <tr>
 <td>${r.fecha}</td>
 <td>${r.nombre}</td>
@@ -246,25 +279,8 @@ tbody.innerHTML += `
 </tr>`;
 });
 }
-
-function exportarDia() {
-const fecha = document.getElementById("fechaReg").value;
-const registros = baseDatos[fecha];
-if (!registros) return alert("No hay registros");
-const ws = XLSX.utils.json_to_sheet(registros);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, fecha);
-XLSX.writeFile(wb, "Remitos_"+fecha+".xlsx");
-}
-
-function exportarRango() {
-if (vistaActual.length===0) return alert("No hay datos");
-const ws = XLSX.utils.json_to_sheet(vistaActual);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "Rango");
-XLSX.writeFile(wb, "Remitos_Rango.xlsx");
-}
 </script>
 
 </body>
 </html>
+
