@@ -13,7 +13,7 @@ body { font-family: Arial; padding:20px; background:#f4f4f9; }
 .container { max-width:1100px; margin:auto; background:white; padding:20px; border-radius:10px; }
 .upload-box { background:#e7f3ff; border:2px dashed #007bff; padding:20px; text-align:center; border-radius:8px; margin-bottom:20px; }
 label { font-weight:bold; display:block; margin-top:10px; }
-input { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px; }
+input, select { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px; }
 button { padding:8px 12px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
 .btn-blue { background:#007bff; color:white; width:100%; }
 .btn-green { background:#28a745; color:white; width:100%; }
@@ -42,6 +42,12 @@ th { background:#f1f1f1; }
 <p id="estado"></p>
 <canvas id="tempCanvas"></canvas>
 
+<label>Depósito</label>
+<select id="deposito">
+<option value="santafe">Depósito Santa Fe</option>
+<option value="bsas">Depósito Buenos Aires</option>
+</select>
+
 <label>Sr.(es) / Nombre</label>
 <input type="text" id="nombre" />
 
@@ -56,28 +62,12 @@ th { background:#f1f1f1; }
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
 <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
-<button class="btn-red" onclick="borrarDiaCompleto()">BORRAR DÍA</button>
-
-<div class="filtro">
-<h3>Filtrar por Rango de Fechas</h3>
-<div class="flex">
-<div>
-<label>Desde</label>
-<input type="date" id="fechaDesde">
-</div>
-<div>
-<label>Hasta</label>
-<input type="date" id="fechaHasta">
-</div>
-</div>
-<button class="btn-orange" onclick="verRango()">VER RANGO</button>
-<button class="btn-orange" onclick="exportarRango()">EXPORTAR RANGO</button>
-</div>
 
 <table id="tablaRegistros">
 <thead>
 <tr>
 <th>Fecha</th>
+<th>Depósito</th>
 <th>Nombre</th>
 <th>Cuenta</th>
 <th>Remito</th>
@@ -91,41 +81,17 @@ th { background:#f1f1f1; }
 
 <script>
 let baseDatos = {};
-let vistaActual = [];
+let vistaActual = {};
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
-window.onload = function() {
-cargarDesdeStorage();
-limpiarDiasAntiguos();
-cargarRegistrosDelDia();
-};
-
-function guardarEnStorage() {
-localStorage.setItem("remitosPorDia", JSON.stringify(baseDatos));
+function limpiarNombre(texto) {
+return texto
+.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"")
+.replace(/\s+/g," ")
+.trim();
 }
 
-function cargarDesdeStorage() {
-const datos = localStorage.getItem("remitosPorDia");
-if (datos) baseDatos = JSON.parse(datos);
-}
-
-function limpiarDiasAntiguos() {
-const hoy = new Date();
-for (let fecha in baseDatos) {
-const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
-if (diferencia > 7) delete baseDatos[fecha];
-}
-guardarEnStorage();
-}
-
-function cargarRegistrosDelDia() {
-const fecha = document.getElementById("fechaReg").value;
-vistaActual = (baseDatos[fecha] || []).map(r => ({...r, fecha}));
-actualizarTabla();
-}
-
-// ======== OCR optimizado ========
 async function ejecutarLectura() {
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
@@ -140,17 +106,12 @@ img.onload = async () => {
 const canvas = document.getElementById("tempCanvas");
 const ctx = canvas.getContext("2d");
 
-// Redimensionar si es muy grande
-const maxWidth = 1200;
-let scale = Math.min(1, maxWidth / img.width);
-canvas.width = img.width * scale;
-canvas.height = img.height * scale;
+canvas.width = img.width;
+canvas.height = img.height;
 
-// Mejor contraste y grises
 ctx.filter = "grayscale(1) contrast(1.8)";
-ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+ctx.drawImage(img, 0, 0);
 
-// OCR rápido: SINGLE_BLOCK
 const result = await Tesseract.recognize(canvas, "spa", {
   tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
 });
@@ -158,11 +119,6 @@ const result = await Tesseract.recognize(canvas, "spa", {
 extraerInformacion(result.data.text);
 estado.innerText = "Lectura finalizada ✔";
 };
-// =================================
-}
-
-function limpiarNombre(texto) {
-return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
 function extraerInformacion(texto) {
@@ -172,16 +128,17 @@ let nombre="", cuenta="", remito="";
 for (let linea of lineas) {
 
 if (/Sr\.?\(?es\)?/i.test(linea)) {
-let limpia = linea.replace(/Sr\.?\(?es\)?/i,"").trim();
-let partes = limpia.split(/\s{4,}/);
-if (partes.length>=1) nombre = limpiarNombre(partes[0]);
+let despues = linea.split(/Sr\.?\(?es\)?/i)[1];
+if (despues) {
+let posibleNombre = despues.split(/\d{4,}/)[0];
+nombre = limpiarNombre(posibleNombre);
+}
 let matchCuenta = linea.match(/\d{4,12}/);
 if (matchCuenta) cuenta = matchCuenta[0];
-continue;
 }
 
 if (!remito) {
-let matchRemito = linea.match(/\b(1101|1104|0104|3008)[-\s]?\d+\b/);
+let matchRemito = linea.match(/\b(1101|1104|0104|3008|1107|3009)[-\s]?\d+\b/);
 if (matchRemito) remito = matchRemito[0];
 }
 }
@@ -191,100 +148,44 @@ document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
 }
 
-// ======== Gestión de registros ========
 function guardarRegistro() {
 const fecha = document.getElementById("fechaReg").value;
-if (!baseDatos[fecha]) baseDatos[fecha] = [];
+const deposito = document.getElementById("deposito").value;
+const nombre = document.getElementById("nombre").value;
+const cuenta = document.getElementById("cuenta").value;
+const remito = document.getElementById("remito").value;
 
-const nuevo = {
-nombre: document.getElementById("nombre").value,
-cuenta: document.getElementById("cuenta").value,
-remito: document.getElementById("remito").value
-};
+if (!nombre || !remito) return alert("Datos insuficientes");
 
-if (!nuevo.nombre && !nuevo.remito) return alert("Datos insuficientes");
+const prefijo = remito.split("-")[0];
 
-baseDatos[fecha].push(nuevo);
-guardarEnStorage();
-cargarRegistrosDelDia();
-}
+if (deposito==="santafe" && !["1101","1104","0104","3008"].includes(prefijo))
+return alert("Este remito no corresponde a Depósito Santa Fe");
 
-function borrarRegistro(index) {
-const fecha = vistaActual[index].fecha;
-baseDatos[fecha].splice(baseDatos[fecha].indexOf(vistaActual[index]),1);
-guardarEnStorage();
-cargarRegistrosDelDia();
-}
+if (deposito==="bsas" && !["1107","3009"].includes(prefijo))
+return alert("Este remito no corresponde a Depósito Buenos Aires");
 
-function borrarDiaCompleto() {
-const fecha = document.getElementById("fechaReg").value;
-if (!baseDatos[fecha]) return;
-if (confirm("¿Seguro que querés borrar este día completo?")) {
-delete baseDatos[fecha];
-guardarEnStorage();
-cargarRegistrosDelDia();
-}
-}
+if (!baseDatos[deposito]) baseDatos[deposito]={};
+if (!baseDatos[deposito][fecha]) baseDatos[deposito][fecha]=[];
 
-// ======== Filtrar y exportar por rango ========
-function verRango() {
-const desde = document.getElementById("fechaDesde").value;
-const hasta = document.getElementById("fechaHasta").value;
-if (!desde || !hasta) return alert("Selecciona rango");
-if (desde > hasta) return alert("La fecha DESDE no puede ser mayor que HASTA");
-
-vistaActual = [];
-for (let fecha in baseDatos) {
-if (fecha >= desde && fecha <= hasta) {
-baseDatos[fecha].forEach(r=>{
-vistaActual.push({fecha:fecha,nombre:r.nombre,cuenta:r.cuenta,remito:r.remito});
-});
-}
-}
-if(vistaActual.length===0) alert("No hay registros en ese rango");
+baseDatos[deposito][fecha].push({nombre,cuenta,remito});
 actualizarTabla();
 }
 
-function exportarDia() {
-const fecha = document.getElementById("fechaReg").value;
-const registros = baseDatos[fecha];
-if (!registros || registros.length===0) return alert("No hay registros ese día");
-const ws = XLSX.utils.json_to_sheet(registros);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, fecha);
-XLSX.writeFile(wb, "Remitos_"+fecha+".xlsx");
-}
-
-function exportarRango() {
-const desde = document.getElementById("fechaDesde").value;
-const hasta = document.getElementById("fechaHasta").value;
-if (!desde || !hasta) return alert("Selecciona rango");
-if (desde > hasta) return alert("La fecha DESDE no puede ser mayor que HASTA");
-
-let datosExportar = [];
-for (let fecha in baseDatos) {
-if (fecha >= desde && fecha <= hasta) {
-baseDatos[fecha].forEach(r=>{
-datosExportar.push({fecha:fecha,nombre:r.nombre,cuenta:r.cuenta,remito:r.remito});
-});
-}
-}
-
-if(datosExportar.length===0) return alert("No hay registros en ese rango");
-
-const ws = XLSX.utils.json_to_sheet(datosExportar);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "Rango");
-XLSX.writeFile(wb, `Remitos_${desde}_al_${hasta}.xlsx`);
-}
-
 function actualizarTabla() {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+
 const tbody = document.querySelector("#tablaRegistros tbody");
 tbody.innerHTML="";
-vistaActual.forEach((r,i)=>{
+
+if (!baseDatos[deposito] || !baseDatos[deposito][fecha]) return;
+
+baseDatos[deposito][fecha].forEach((r,i)=>{
 tbody.innerHTML+=`
 <tr>
-<td>${r.fecha}</td>
+<td>${fecha}</td>
+<td>${deposito}</td>
 <td>${r.nombre}</td>
 <td>${r.cuenta}</td>
 <td>${r.remito}</td>
@@ -292,9 +193,34 @@ tbody.innerHTML+=`
 </tr>`;
 });
 }
+
+function borrarRegistro(index) {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+baseDatos[deposito][fecha].splice(index,1);
+actualizarTabla();
+}
+
+function exportarDia() {
+const deposito = document.getElementById("deposito").value;
+const fecha = document.getElementById("fechaReg").value;
+
+if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
+return alert("No hay registros");
+
+const datos = baseDatos[deposito][fecha];
+const ws = XLSX.utils.json_to_sheet(datos);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, fecha);
+
+let nombreArchivo = deposito==="santafe" ?
+`Remitos_SantaFe_${fecha}.xlsx` :
+`Remitos_BuenosAires_${fecha}.xlsx`;
+
+XLSX.writeFile(wb, nombreArchivo);
+}
 </script>
 
 </body>
 </html>
-
 
