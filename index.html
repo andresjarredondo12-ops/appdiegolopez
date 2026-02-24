@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Con Historial Persistente</title>
+<title>Extractor de Remitos - Base por Día</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -14,18 +14,15 @@ body { font-family: Arial; padding:20px; background:#f4f4f9; }
 .upload-box { background:#e7f3ff; border:2px dashed #007bff; padding:20px; text-align:center; border-radius:8px; margin-bottom:20px; }
 label { font-weight:bold; display:block; margin-top:15px; }
 input { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px; }
-button { padding:10px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
-.btn-blue { background:#007bff; color:white; width:100%; }
-.btn-green { background:#28a745; color:white; width:100%; }
-.btn-orange { background:#fd7e14; color:white; width:100%; }
-.filtro { background:#f8f9fa; padding:15px; border-radius:8px; margin-top:20px; }
+button { width:100%; padding:10px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
+.btn-blue { background:#007bff; color:white; }
+.btn-green { background:#28a745; color:white; }
+.btn-orange { background:#fd7e14; color:white; }
 table { width:100%; border-collapse:collapse; margin-top:20px; }
 th, td { border:1px solid #ddd; padding:8px; }
 th { background:#f1f1f1; }
 #estado { text-align:center; font-weight:bold; }
 #tempCanvas { display:none; }
-.flex { display:flex; gap:10px; }
-.flex div { flex:1; }
 </style>
 </head>
 <body>
@@ -51,30 +48,15 @@ th { background:#f1f1f1; }
 <input type="text" id="remito" />
 
 <label>Fecha</label>
-<input type="date" id="fechaReg" />
+<input type="date" id="fechaReg" onchange="cargarRegistrosDelDia()" />
 
-<button class="btn-green" onclick="guardarEnTabla()">GUARDAR REGISTRO</button>
+<button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
 
-<div class="filtro">
-<h3>Filtrar por Fecha</h3>
-<div class="flex">
-<div>
-<label>Desde</label>
-<input type="date" id="fechaDesde">
-</div>
-<div>
-<label>Hasta</label>
-<input type="date" id="fechaHasta">
-</div>
-</div>
-<button class="btn-orange" onclick="filtrarPorFecha()">FILTRAR</button>
-<button class="btn-orange" onclick="exportarFiltrado()">EXPORTAR FILTRADOS</button>
-</div>
+<button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA ACTUAL</button>
 
 <table id="tablaRegistros">
 <thead>
 <tr>
-<th>Fecha</th>
 <th>Nombre</th>
 <th>Cuenta</th>
 <th>Remito</th>
@@ -86,38 +68,45 @@ th { background:#f1f1f1; }
 </div>
 
 <script>
-let baseDatos = [];
+let baseDatos = {};
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
 window.onload = function() {
 cargarDesdeStorage();
-limpiarRegistrosAntiguos();
-actualizarTabla(baseDatos);
+limpiarDiasAntiguos();
+cargarRegistrosDelDia();
 };
 
 function guardarEnStorage() {
-localStorage.setItem("remitosDB", JSON.stringify(baseDatos));
+localStorage.setItem("remitosPorDia", JSON.stringify(baseDatos));
 }
 
 function cargarDesdeStorage() {
-const datos = localStorage.getItem("remitosDB");
-if (datos) {
-baseDatos = JSON.parse(datos);
-}
+const datos = localStorage.getItem("remitosPorDia");
+if (datos) baseDatos = JSON.parse(datos);
 }
 
-function limpiarRegistrosAntiguos() {
+function limpiarDiasAntiguos() {
 const hoy = new Date();
-baseDatos = baseDatos.filter(r => {
-const fechaReg = new Date(r.fecha);
-const diferencia = (hoy - fechaReg) / (1000 * 60 * 60 * 24);
-return diferencia <= 7;
-});
+for (let fecha in baseDatos) {
+const fechaObj = new Date(fecha);
+const diferencia = (hoy - fechaObj) / (1000 * 60 * 60 * 24);
+if (diferencia > 7) {
+delete baseDatos[fecha];
+}
+}
 guardarEnStorage();
 }
 
+function cargarRegistrosDelDia() {
+const fecha = document.getElementById("fechaReg").value;
+const registros = baseDatos[fecha] || [];
+actualizarTabla(registros);
+}
+
 async function ejecutarLectura() {
+
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
 
@@ -128,6 +117,7 @@ const img = new Image();
 img.src = URL.createObjectURL(file);
 
 img.onload = async () => {
+
 const canvas = document.getElementById("tempCanvas");
 const ctx = canvas.getContext("2d");
 canvas.width = img.width * 1.4;
@@ -137,11 +127,13 @@ ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
 const result = await Tesseract.recognize(canvas, "spa");
 extraerInformacion(result.data.text);
+
 estado.innerText = "Lectura finalizada ✔";
 };
 }
 
 function extraerInformacion(texto) {
+
 const lineas = texto.split("\n").map(l => l.trim());
 
 let nombre="", cuenta="", remito="";
@@ -168,19 +160,26 @@ document.getElementById("cuenta").value = cuenta;
 document.getElementById("remito").value = remito;
 }
 
-function guardarEnTabla() {
-const reg = {
-fecha: document.getElementById("fechaReg").value,
+function guardarRegistro() {
+
+const fecha = document.getElementById("fechaReg").value;
+
+if (!baseDatos[fecha]) {
+baseDatos[fecha] = [];
+}
+
+const nuevo = {
 nombre: document.getElementById("nombre").value,
 cuenta: document.getElementById("cuenta").value,
 remito: document.getElementById("remito").value
 };
 
-if (!reg.nombre && !reg.remito) return alert("Datos insuficientes");
+if (!nuevo.nombre && !nuevo.remito) return alert("Datos insuficientes");
 
-baseDatos.push(reg);
+baseDatos[fecha].push(nuevo);
+
 guardarEnStorage();
-actualizarTabla(baseDatos);
+cargarRegistrosDelDia();
 }
 
 function actualizarTabla(datos) {
@@ -189,7 +188,6 @@ tbody.innerHTML = "";
 datos.forEach(r => {
 tbody.innerHTML += `
 <tr>
-<td>${r.fecha}</td>
 <td>${r.nombre}</td>
 <td>${r.cuenta}</td>
 <td>${r.remito}</td>
@@ -197,30 +195,21 @@ tbody.innerHTML += `
 });
 }
 
-function filtrarPorFecha() {
-const desde = document.getElementById("fechaDesde").value;
-const hasta = document.getElementById("fechaHasta").value;
+function exportarDia() {
 
-if (!desde || !hasta) return alert("Selecciona rango");
+const fecha = document.getElementById("fechaReg").value;
+const registros = baseDatos[fecha];
 
-const filtrados = baseDatos.filter(r => r.fecha >= desde && r.fecha <= hasta);
-actualizarTabla(filtrados);
-}
+if (!registros || registros.length === 0)
+return alert("No hay registros ese día");
 
-function exportarFiltrado() {
-const desde = document.getElementById("fechaDesde").value;
-const hasta = document.getElementById("fechaHasta").value;
-
-const filtrados = baseDatos.filter(r => r.fecha >= desde && r.fecha <= hasta);
-
-if (filtrados.length === 0) return alert("No hay datos en ese rango");
-
-const ws = XLSX.utils.json_to_sheet(filtrados);
+const ws = XLSX.utils.json_to_sheet(registros);
 const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "Remitos");
-XLSX.writeFile(wb, "Remitos_Filtrados.xlsx");
+XLSX.utils.book_append_sheet(wb, ws, fecha);
+XLSX.writeFile(wb, "Remitos_" + fecha + ".xlsx");
 }
 </script>
 
 </body>
 </html>
+
