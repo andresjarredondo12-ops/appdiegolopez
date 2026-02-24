@@ -3,27 +3,30 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Profesional</title>
+<title>Extractor de Remitos - Sistema Completo</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
 body { font-family: Arial; padding:20px; background:#f4f4f9; }
-.container { max-width:1000px; margin:auto; background:white; padding:20px; border-radius:10px; }
+.container { max-width:1100px; margin:auto; background:white; padding:20px; border-radius:10px; }
 .upload-box { background:#e7f3ff; border:2px dashed #007bff; padding:20px; text-align:center; border-radius:8px; margin-bottom:20px; }
-label { font-weight:bold; display:block; margin-top:15px; }
+label { font-weight:bold; display:block; margin-top:10px; }
 input { width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:5px; }
 button { padding:8px 12px; margin-top:10px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; }
 .btn-blue { background:#007bff; color:white; width:100%; }
 .btn-green { background:#28a745; color:white; width:100%; }
-.btn-orange { background:#fd7e14; color:white; width:100%; }
+.btn-orange { background:#fd7e14; color:white; }
 .btn-red { background:#dc3545; color:white; }
+.flex { display:flex; gap:10px; }
+.flex div { flex:1; }
 table { width:100%; border-collapse:collapse; margin-top:20px; }
 th, td { border:1px solid #ddd; padding:8px; text-align:center; }
 th { background:#f1f1f1; }
 #estado { text-align:center; font-weight:bold; }
 #tempCanvas { display:none; }
+.filtro { background:#f8f9fa; padding:15px; border-radius:8px; margin-top:20px; }
 </style>
 </head>
 <body>
@@ -52,12 +55,29 @@ th { background:#f1f1f1; }
 <input type="date" id="fechaReg" onchange="cargarRegistrosDelDia()" />
 
 <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
-<button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA ACTUAL</button>
-<button class="btn-red" onclick="borrarDiaCompleto()">BORRAR TODOS LOS REGISTROS DEL DÍA</button>
+<button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
+<button class="btn-red" onclick="borrarDiaCompleto()">BORRAR DÍA</button>
+
+<div class="filtro">
+<h3>Filtrar por Rango de Fechas</h3>
+<div class="flex">
+<div>
+<label>Desde</label>
+<input type="date" id="fechaDesde">
+</div>
+<div>
+<label>Hasta</label>
+<input type="date" id="fechaHasta">
+</div>
+</div>
+<button class="btn-orange" onclick="verRango()">VER RANGO</button>
+<button class="btn-orange" onclick="exportarRango()">EXPORTAR RANGO</button>
+</div>
 
 <table id="tablaRegistros">
 <thead>
 <tr>
+<th>Fecha</th>
 <th>Nombre</th>
 <th>Cuenta</th>
 <th>Remito</th>
@@ -71,6 +91,7 @@ th { background:#f1f1f1; }
 
 <script>
 let baseDatos = {};
+let vistaActual = [];
 
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
@@ -92,8 +113,7 @@ if (datos) baseDatos = JSON.parse(datos);
 function limpiarDiasAntiguos() {
 const hoy = new Date();
 for (let fecha in baseDatos) {
-const fechaObj = new Date(fecha);
-const diferencia = (hoy - fechaObj) / (1000 * 60 * 60 * 24);
+const diferencia = (hoy - new Date(fecha)) / (1000*60*60*24);
 if (diferencia > 7) delete baseDatos[fecha];
 }
 guardarEnStorage();
@@ -101,12 +121,11 @@ guardarEnStorage();
 
 function cargarRegistrosDelDia() {
 const fecha = document.getElementById("fechaReg").value;
-const registros = baseDatos[fecha] || [];
-actualizarTabla(registros);
+vistaActual = (baseDatos[fecha] || []).map(r => ({...r, fecha}));
+actualizarTabla();
 }
 
 async function ejecutarLectura() {
-
 const file = document.getElementById('imageInput').files[0];
 if (!file) return alert("Selecciona imagen");
 
@@ -122,7 +141,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = img.width * 1.4;
 canvas.height = img.height * 1.4;
 ctx.filter = "contrast(1.6) grayscale(1)";
-ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+ctx.drawImage(img, 0, 0);
 
 const result = await Tesseract.recognize(canvas, "spa");
 extraerInformacion(result.data.text);
@@ -132,33 +151,21 @@ estado.innerText = "Lectura finalizada ✔";
 }
 
 function limpiarNombre(texto) {
-return texto
-.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, "") // solo letras
-.replace(/\s+/g, " ")
-.trim();
+return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
 function extraerInformacion(texto) {
-
 const lineas = texto.split("\n").map(l => l.trim());
-
 let nombre="", cuenta="", remito="";
 
 for (let linea of lineas) {
 
 if (/Sr\.?\(?es\)?/i.test(linea)) {
-
-let limpia = linea.replace(/Sr\.?\(?es\)?/i, "").trim();
-
+let limpia = linea.replace(/Sr\.?\(?es\)?/i,"").trim();
 let partes = limpia.split(/\s{4,}/);
-
-if (partes.length >= 1) {
-nombre = limpiarNombre(partes[0]);
-}
-
+if (partes.length>=1) nombre = limpiarNombre(partes[0]);
 let matchCuenta = linea.match(/\d{4,12}/);
 if (matchCuenta) cuenta = matchCuenta[0];
-
 continue;
 }
 
@@ -174,7 +181,6 @@ document.getElementById("remito").value = remito;
 }
 
 function guardarRegistro() {
-
 const fecha = document.getElementById("fechaReg").value;
 if (!baseDatos[fecha]) baseDatos[fecha] = [];
 
@@ -192,8 +198,8 @@ cargarRegistrosDelDia();
 }
 
 function borrarRegistro(index) {
-const fecha = document.getElementById("fechaReg").value;
-baseDatos[fecha].splice(index, 1);
+const fecha = vistaActual[index].fecha;
+baseDatos[fecha].splice(baseDatos[fecha].indexOf(vistaActual[index]),1);
 guardarEnStorage();
 cargarRegistrosDelDia();
 }
@@ -201,39 +207,62 @@ cargarRegistrosDelDia();
 function borrarDiaCompleto() {
 const fecha = document.getElementById("fechaReg").value;
 if (!baseDatos[fecha]) return;
-if (confirm("¿Seguro que querés borrar todos los registros de este día?")) {
+if (confirm("¿Seguro que querés borrar este día completo?")) {
 delete baseDatos[fecha];
 guardarEnStorage();
 cargarRegistrosDelDia();
 }
 }
 
-function actualizarTabla(datos) {
+function verRango() {
+const desde = document.getElementById("fechaDesde").value;
+const hasta = document.getElementById("fechaHasta").value;
+if (!desde || !hasta) return alert("Selecciona rango");
+
+vistaActual = [];
+
+for (let fecha in baseDatos) {
+if (fecha >= desde && fecha <= hasta) {
+baseDatos[fecha].forEach(r => {
+vistaActual.push({...r, fecha});
+});
+}
+}
+
+actualizarTabla();
+}
+
+function actualizarTabla() {
 const tbody = document.querySelector("#tablaRegistros tbody");
-tbody.innerHTML = "";
-datos.forEach((r, index) => {
+tbody.innerHTML="";
+vistaActual.forEach((r,i)=>{
 tbody.innerHTML += `
 <tr>
+<td>${r.fecha}</td>
 <td>${r.nombre}</td>
 <td>${r.cuenta}</td>
 <td>${r.remito}</td>
-<td><button class="btn-red" onclick="borrarRegistro(${index})">🗑</button></td>
+<td><button class="btn-red" onclick="borrarRegistro(${i})">🗑</button></td>
 </tr>`;
 });
 }
 
 function exportarDia() {
-
 const fecha = document.getElementById("fechaReg").value;
 const registros = baseDatos[fecha];
-
-if (!registros || registros.length === 0)
-return alert("No hay registros ese día");
-
+if (!registros) return alert("No hay registros");
 const ws = XLSX.utils.json_to_sheet(registros);
 const wb = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb, ws, fecha);
-XLSX.writeFile(wb, "Remitos_" + fecha + ".xlsx");
+XLSX.writeFile(wb, "Remitos_"+fecha+".xlsx");
+}
+
+function exportarRango() {
+if (vistaActual.length===0) return alert("No hay datos");
+const ws = XLSX.utils.json_to_sheet(vistaActual);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, "Rango");
+XLSX.writeFile(wb, "Remitos_Rango.xlsx");
 }
 </script>
 
