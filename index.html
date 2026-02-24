@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Extractor de Remitos - Versión Mejorada</title>
+<title>Extractor de Remitos - Versión Corregida Cuenta</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -11,19 +11,17 @@
 <style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f9; }
   .container { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-  h2 { text-align: center; color: #333; }
+  h2 { text-align: center; }
   .upload-box { background: #e7f3ff; border: 2px dashed #007bff; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
-  label { font-weight: bold; display: block; margin-top: 15px; color: #555; }
-  input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
-  input:focus { background: #fffde7; border-color: #f39c12; outline: none; }
-  button { width: 100%; padding: 15px; margin-top: 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px; }
+  label { font-weight: bold; display: block; margin-top: 15px; }
+  input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
+  button { width: 100%; padding: 12px; margin-top: 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
   .btn-blue { background: #007bff; color: white; }
-  .btn-green { background: #28a745; color: white; margin-top: 25px; }
+  .btn-green { background: #28a745; color: white; }
   .btn-orange { background: #fd7e14; color: white; }
-  #estado { text-align: center; font-weight: bold; color: #007bff; margin: 10px 0; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-  th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-  th { background: #f8f9fa; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { border: 1px solid #ddd; padding: 8px; }
+  th { background: #f1f1f1; }
   #tempCanvas { display: none; }
 </style>
 </head>
@@ -49,12 +47,10 @@
   <label>Nro Remito</label>
   <input type="text" id="remito" />
 
-  <label>Fecha de este registro</label>
+  <label>Fecha</label>
   <input type="date" id="fechaReg" />
 
-  <button class="btn-green" onclick="guardarEnTabla()">GUARDAR REGISTRO ✅</button>
-
-  <hr>
+  <button class="btn-green" onclick="guardarEnTabla()">GUARDAR REGISTRO</button>
 
   <button class="btn-orange" onclick="exportarExcel()">EXPORTAR A EXCEL</button>
 
@@ -64,25 +60,20 @@
         <th>Fecha</th>
         <th>Nombre</th>
         <th>Cuenta</th>
-        <th>Nro Remito</th>
+        <th>Remito</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
-
 </div>
 
 <script>
 let baseDatos = [];
-
 document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
 
 async function ejecutarLectura() {
   const file = document.getElementById('imageInput').files[0];
   if (!file) return alert("Selecciona una imagen");
-
-  const estado = document.getElementById('estado');
-  estado.innerText = "Procesando imagen...";
 
   const img = new Image();
   img.src = URL.createObjectURL(file);
@@ -93,89 +84,81 @@ async function ejecutarLectura() {
 
     canvas.width = img.width * 1.5;
     canvas.height = img.height * 1.5;
-
     ctx.filter = "contrast(1.6) grayscale(1)";
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    try {
-      const { data: { text } } = await Tesseract.recognize(canvas, 'spa', {
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-/ "
-      });
-
-      estado.innerText = "Lectura terminada ✔";
-      extraerInformacion(text);
-
-    } catch (error) {
-      estado.innerText = "Error al procesar imagen";
-    }
+    const { data: { text } } = await Tesseract.recognize(canvas, 'spa');
+    extraerInformacion(text);
   };
 }
 
-function limpiarTexto(texto) {
-  return texto
-    .replace(/[|]/g, "I")
-    .replace(/0(?=\D)/g, "O")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+function extraerInformacion(texto) {
 
-function extraerInformacion(textoOriginal) {
+  const lineas = texto.split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 3);
 
-  const texto = limpiarTexto(textoOriginal);
-  const lineas = textoOriginal.split("\n").map(l => l.trim()).filter(l => l.length > 3);
-
-  // REMITO (prefijos obligatorios)
-  const remitoMatch = texto.match(/\b(1101|1104|0104|3008)[-\s]?\d+\b/);
-  document.getElementById("remito").value = remitoMatch ? remitoMatch[0] : "";
-
-  // CUENTA (número largo sin etiqueta)
-  const cuentaMatch = texto.match(/\b\d{5,10}\b/);
-  document.getElementById("cuenta").value = cuentaMatch ? cuentaMatch[0] : "";
-
-  // NOMBRE
+  let cuenta = "";
   let nombre = "";
+  let remito = "";
 
-  // 1️⃣ Buscar línea que contenga Sr o Cliente
   for (let linea of lineas) {
-    if (/Sr|Señor|Cliente/i.test(linea)) {
-      nombre = linea.replace(/Sr\.?|Señor|Cliente|:/gi, "").trim();
-      if (nombre.length > 4) break;
-    }
-  }
 
-  // 2️⃣ Si no encontró, buscar línea con mayúsculas largas
-  if (!nombre) {
-    for (let linea of lineas) {
-      if (/^[A-ZÁÉÍÓÚÑ\s]{5,}$/.test(linea)) {
-        nombre = linea.trim();
-        break;
+    // --- CUENTA ---
+    if (/Cuenta/i.test(linea)) {
+      const matchCuenta = linea.match(/\d{4,10}/);
+      if (matchCuenta) cuenta = matchCuenta[0];
+      continue; // IMPORTANTE: saltamos esta línea para que no sea nombre
+    }
+
+    // --- REMITO ---
+    if (!remito) {
+      const matchRemito = linea.match(/\b(1101|1104|0104|3008)[-\s]?\d+\b/);
+      if (matchRemito) {
+        remito = matchRemito[0];
+        continue;
+      }
+    }
+
+    // --- NOMBRE ---
+    if (!nombre) {
+      // Ignorar líneas que contengan palabras técnicas
+      if (!/Cuenta|Remito|Fecha|Factura|Total|IVA/i.test(linea)) {
+
+        if (/Sr|Señor|Cliente/i.test(linea)) {
+          nombre = linea.replace(/Sr\.?|Señor|Cliente|:/gi, "").trim();
+        } 
+        else if (/^[A-ZÁÉÍÓÚÑ\s]{5,}$/.test(linea)) {
+          nombre = linea.trim();
+        }
       }
     }
   }
 
+  document.getElementById("cuenta").value = cuenta;
+  document.getElementById("remito").value = remito;
   document.getElementById("nombre").value = nombre;
 }
 
 function guardarEnTabla() {
-
   const reg = {
     fecha: document.getElementById('fechaReg').value,
-    nombre: document.getElementById('nombre').value.trim(),
-    cuenta: document.getElementById('cuenta').value.trim(),
-    remito: document.getElementById('remito').value.trim()
+    nombre: document.getElementById('nombre').value,
+    cuenta: document.getElementById('cuenta').value,
+    remito: document.getElementById('remito').value
   };
 
   if (!reg.nombre && !reg.remito) {
-    alert("No se detectaron datos suficientes.");
+    alert("No hay datos suficientes.");
     return;
   }
 
   baseDatos.push(reg);
-  actualizarVista();
+  actualizarTabla();
   limpiarCampos();
 }
 
-function actualizarVista() {
+function actualizarTabla() {
   const tbody = document.querySelector("#tablaRegistros tbody");
   tbody.innerHTML = "";
   baseDatos.forEach(r => {
