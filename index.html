@@ -4,10 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Extractor de Remitos - Optimizado</title>
-
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
 <style>
 body { font-family: Arial; padding:20px; background:#f4f4f9; }
 .container { max-width:1100px; margin:auto; background:white; padding:20px; border-radius:10px; }
@@ -30,315 +28,256 @@ th { background:#f1f1f1; }
 </style>
 </head>
 <body>
-
 <div class="container">
-<h2>Extractor de Remitos - Optimizado</h2>
+  <h2>Extractor de Remitos - Optimizado</h2>
 
-<div class="upload-box">
-<input type="file" id="imageInput" accept="image/*" />
-<button class="btn-blue" onclick="ejecutarLectura()">PROCESAR IMAGEN</button>
-</div>
+  <div class="upload-box">
+    <input type="file" id="imageInput" accept="image/*" />
+    <button class="btn-blue" onclick="ejecutarLectura()">PROCESAR IMAGEN</button>
+  </div>
 
-<p id="estado"></p>
-<canvas id="tempCanvas"></canvas>
+  <p id="estado"></p>
+  <canvas id="tempCanvas"></canvas>
 
-<label>Depósito</label>
-<select id="deposito" onchange="guardarEstado(); actualizarTabla();">
-<option value="santafe">Depósito Santa Fe</option>
-<option value="bsas">Depósito Buenos Aires</option>
-</select>
+  <label>Depósito</label>
+  <select id="deposito" onchange="guardarEstado(); actualizarTabla();">
+    <option value="santafe">Depósito Santa Fe</option>
+    <option value="bsas">Depósito Buenos Aires</option>
+  </select>
 
-<label>Sr.(es) / Nombre</label>
-<input type="text" id="nombre" />
+  <label>Sr.(es) / Nombre</label>
+  <input type="text" id="nombre" />
 
-<label>Cuenta</label>
-<input type="text" id="cuenta" />
+  <label>Cuenta</label>
+  <input type="text" id="cuenta" />
 
-<label>Nro Remito</label>
-<input type="text" id="remito" />
+  <label>Nro Remito</label>
+  <input type="text" id="remito" />
 
-<label>Fecha</label>
-<input type="date" id="fechaReg" onchange="guardarEstado(); actualizarTabla();" />
+  <label>Fecha</label>
+  <input type="date" id="fechaReg" onchange="guardarEstado(); actualizarTabla();" />
 
-<button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
-<button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
-<button class="btn-red" onclick="borrarArchivoDia()">BORRAR ARCHIVO</button>
+  <button class="btn-green" onclick="guardarRegistro()">GUARDAR REGISTRO</button>
+  <button class="btn-orange" onclick="exportarDia()">EXPORTAR DÍA</button>
+  <button class="btn-red" onclick="borrarArchivoDia()">BORRAR ARCHIVO</button>
 
-<div class="filtro">
-<h3>Ver por Rango de Fechas</h3>
-<div class="flex">
-<div>
-<label>Desde</label>
-<input type="date" id="fechaDesde">
-</div>
-<div>
-<label>Hasta</label>
-<input type="date" id="fechaHasta">
-</div>
-</div>
-<button class="btn-orange" onclick="verRango()">VER RANGO</button>
-</div>
+  <div class="filtro">
+    <h3>Ver por Rango de Fechas</h3>
+    <div class="flex">
+      <div>
+        <label>Desde</label>
+        <input type="date" id="fechaDesde">
+      </div>
+      <div>
+        <label>Hasta</label>
+        <input type="date" id="fechaHasta">
+      </div>
+    </div>
+    <button class="btn-orange" onclick="verRango()">VER RANGO</button>
+  </div>
 
-<table id="tablaRegistros">
-<thead>
-<tr>
-<th>Fecha</th>
-<th>Depósito</th>
-<th>Nombre</th>
-<th>Cuenta</th>
-<th>Remito</th>
-<th>Acción</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
+  <table id="tablaRegistros">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Depósito</th>
+        <th>Nombre</th>
+        <th>Cuenta</th>
+        <th>Remito</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 </div>
 
 <script>
-
-/* ===== STORAGE FIJO PARA GITHUB PAGES ===== */
-const STORAGE_KEY = "remitosData_appdiegolopez_v1";
-let baseDatos = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+let baseDatos = JSON.parse(localStorage.getItem("remitosData")) || {};
 
 function guardarStorage(){
-localStorage.setItem(STORAGE_KEY, JSON.stringify(baseDatos));
+  localStorage.setItem("remitosData", JSON.stringify(baseDatos));
 }
 
 function guardarEstado(){
-localStorage.setItem("depositoSeleccionado", document.getElementById("deposito").value);
-localStorage.setItem("fechaSeleccionada", document.getElementById("fechaReg").value);
+  localStorage.setItem("depositoSeleccionado", document.getElementById("deposito").value);
+  localStorage.setItem("fechaSeleccionada", document.getElementById("fechaReg").value);
 }
 
 function restaurarEstado(){
-const depositoGuardado = localStorage.getItem("depositoSeleccionado");
-const fechaGuardada = localStorage.getItem("fechaSeleccionada");
+  const depositoGuardado = localStorage.getItem("depositoSeleccionado");
+  const fechaGuardada = localStorage.getItem("fechaSeleccionada");
 
-if(depositoGuardado){
-document.getElementById("deposito").value = depositoGuardado;
-}
+  if(depositoGuardado){
+    document.getElementById("deposito").value = depositoGuardado;
+  }
 
-if(fechaGuardada){
-document.getElementById("fechaReg").value = fechaGuardada;
-}else{
-document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
-}
+  if(fechaGuardada){
+    document.getElementById("fechaReg").value = fechaGuardada;
+  }else{
+    document.getElementById('fechaReg').value = new Date().toISOString().split('T')[0];
+  }
 }
 
 window.onload = function(){
-restaurarEstado();
-actualizarTabla();
+  restaurarEstado();
+  actualizarTabla();
 };
 
 function limpiarNombre(texto) {
-return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
+  return texto.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g,"").replace(/\s+/g," ").trim();
 }
 
-/* ===== OCR FUNCIONANDO ===== */
+/* ===== OCR ORIGINAL ===== */
 async function ejecutarLectura() {
+  const file = document.getElementById('imageInput').files[0];
+  if (!file) return alert("Selecciona imagen");
 
-const file = document.getElementById('imageInput').files[0];
-if (!file) return alert("Selecciona imagen");
+  const estado = document.getElementById("estado");
+  estado.innerText = "Procesando imagen...";
 
-const estado = document.getElementById("estado");
-estado.innerText = "Procesando imagen...";
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
 
-const img = new Image();
-img.src = URL.createObjectURL(file);
+  img.onload = async () => {
+    const canvas = document.getElementById("tempCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.filter = "grayscale(1) contrast(1.8)";
+    ctx.drawImage(img, 0, 0);
 
-img.onload = async () => {
+    const result = await Tesseract.recognize(canvas, "spa", {
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
+    });
 
-const canvas = document.getElementById("tempCanvas");
-const ctx = canvas.getContext("2d");
-
-canvas.width = img.width;
-canvas.height = img.height;
-
-ctx.filter = "grayscale(1) contrast(2)";
-ctx.drawImage(img, 0, 0);
-
-try {
-
-const result = await Tesseract.recognize(canvas, "spa", {
-logger: m => console.log(m)
-});
-
-extraerInformacion(result.data.text);
-estado.innerText = "Lectura finalizada ✔";
-
-} catch (error) {
-
-console.error(error);
-estado.innerText = "Error procesando imagen";
-alert("Error procesando la imagen. Probá con una más nítida.");
-
-}
-
-};
-
-img.onerror = function(){
-estado.innerText = "Error cargando imagen";
-};
-
+    extraerInformacion(result.data.text);
+    estado.innerText = "Lectura finalizada ✔";
+  };
 }
 
 function extraerInformacion(texto) {
-
-const lineas = texto.split("\n").map(l => l.trim());
-let nombre="", cuenta="", remito="";
-
-for (let linea of lineas) {
-
-if (/Sr\.?\(?es\)?/i.test(linea)) {
-let despues = linea.split(/Sr\.?\(?es\)?/i)[1];
-if (despues) {
-let posibleNombre = despues.split(/\d{4,}/)[0];
-nombre = limpiarNombre(posibleNombre);
-}
-let matchCuenta = linea.match(/\d{4,12}/);
-if (matchCuenta) cuenta = matchCuenta[0];
-}
-
-if (!remito) {
-let matchRemito = linea.match(/\b(1101|1104|0104|3008|1107|3009)[-\s]?\d+\b/);
-if (matchRemito) {
-let limpio = matchRemito[0].replace(/\s+/g,"-");
-let partes = limpio.split("-");
-if(partes.length===2){
-remito = partes[0]+"-"+partes[1];
-}
-}
+  const lineas = texto.split("\n").map(l => l.trim());
+  let nombre="", cuenta="", remito="";
+  for (let linea of lineas) {
+    if (/Sr\.?\(?es\)?/i.test(linea)) {
+      let despues = linea.split(/Sr\.?\(?es\)?/i)[1];
+      if (despues) {
+        let posibleNombre = despues.split(/\d{4,}/)[0];
+        nombre = limpiarNombre(posibleNombre);
+      }
+      let matchCuenta = linea.match(/\d{4,12}/);
+      if (matchCuenta) cuenta = matchCuenta[0];
+    }
+    if (!remito) {
+      let matchRemito = linea.match(/\b(1101|1104|0104|3008|1107|3009)[-\s]?\d+\b/);
+      if (matchRemito) remito = matchRemito[0];
+    }
+  }
+  document.getElementById("nombre").value = nombre;
+  document.getElementById("cuenta").value = cuenta;
+  document.getElementById("remito").value = remito;
 }
 
-}
-
-document.getElementById("nombre").value = nombre;
-document.getElementById("cuenta").value = cuenta;
-document.getElementById("remito").value = remito;
-}
-
-/* ===== RESTO DE TU SISTEMA ORIGINAL ===== */
-
+/* ===== FUNCIONES RESTANTES ===== */
 function guardarRegistro() {
+  const fecha = document.getElementById("fechaReg").value;
+  const deposito = document.getElementById("deposito").value;
+  const nombre = document.getElementById("nombre").value;
+  const cuenta = document.getElementById("cuenta").value;
+  const remito = document.getElementById("remito").value;
 
-const fecha = document.getElementById("fechaReg").value;
-const deposito = document.getElementById("deposito").value;
-const nombre = document.getElementById("nombre").value;
-const cuenta = document.getElementById("cuenta").value;
-const remito = document.getElementById("remito").value;
+  if (!nombre || !remito) return alert("Datos insuficientes");
 
-if (!nombre || !remito) return alert("Datos insuficientes");
+  const prefijo = remito.split("-")[0];
 
-const prefijo = remito.split("-")[0];
+  if (deposito==="santafe" && !["1101","1104","0104","3008"].includes(prefijo))
+    return alert("Este remito no corresponde a Depósito Santa Fe");
 
-if (deposito==="santafe" && !["1101","1104","0104","3008"].includes(prefijo))
-return alert("Este remito no corresponde a Depósito Santa Fe");
+  if (deposito==="bsas" && !["1107","3009"].includes(prefijo))
+    return alert("Este remito no corresponde a Depósito Buenos Aires");
 
-if (deposito==="bsas" && !["1107","3009"].includes(prefijo))
-return alert("Este remito no corresponde a Depósito Buenos Aires");
+  if (!baseDatos[deposito]) baseDatos[deposito]={};
+  if (!baseDatos[deposito][fecha]) baseDatos[deposito][fecha]=[];
 
-if (!baseDatos[deposito]) baseDatos[deposito]={};
-if (!baseDatos[deposito][fecha]) baseDatos[deposito][fecha]=[];
-
-baseDatos[deposito][fecha].push({nombre,cuenta,remito});
-guardarStorage();
-guardarEstado();
-actualizarTabla();
+  baseDatos[deposito][fecha].push({nombre,cuenta,remito});
+  guardarStorage();
+  guardarEstado();
+  actualizarTabla();
 }
 
 function borrarRegistro(index){
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-baseDatos[deposito][fecha].splice(index,1);
-guardarStorage();
-actualizarTabla();
+  const deposito = document.getElementById("deposito").value;
+  const fecha = document.getElementById("fechaReg").value;
+  baseDatos[deposito][fecha].splice(index,1);
+  guardarStorage();
+  actualizarTabla();
 }
 
 function borrarArchivoDia(){
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-
-if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
-return alert("No hay registros");
-
-if (confirm("¿Seguro que querés borrar todos los registros del día?")){
-delete baseDatos[deposito][fecha];
-guardarStorage();
-actualizarTabla();
-}
+  const deposito = document.getElementById("deposito").value;
+  const fecha = document.getElementById("fechaReg").value;
+  if (!baseDatos[deposito] || !baseDatos[deposito][fecha]) return alert("No hay registros");
+  if (confirm("¿Seguro que querés borrar todos los registros del día?")){
+    delete baseDatos[deposito][fecha];
+    guardarStorage();
+    actualizarTabla();
+  }
 }
 
 function actualizarTabla(){
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-
-const tbody = document.querySelector("#tablaRegistros tbody");
-tbody.innerHTML="";
-
-if (!baseDatos[deposito] || !baseDatos[deposito][fecha]) return;
-
-baseDatos[deposito][fecha].forEach((r,i)=>{
-tbody.innerHTML+=`
-<tr>
-<td>${fecha}</td>
-<td>${deposito}</td>
-<td>${r.nombre}</td>
-<td>${r.cuenta}</td>
-<td>${r.remito}</td>
-<td><button class="btn-red" onclick="borrarRegistro(${i})">🗑</button></td>
-</tr>`;
-});
+  const deposito = document.getElementById("deposito").value;
+  const fecha = document.getElementById("fechaReg").value;
+  const tbody = document.querySelector("#tablaRegistros tbody");
+  tbody.innerHTML="";
+  if (!baseDatos[deposito] || !baseDatos[deposito][fecha]) return;
+  baseDatos[deposito][fecha].forEach((r,i)=>{
+    tbody.innerHTML+=`<tr>
+      <td>${fecha}</td>
+      <td>${deposito}</td>
+      <td>${r.nombre}</td>
+      <td>${r.cuenta}</td>
+      <td>${r.remito}</td>
+      <td><button class="btn-red" onclick="borrarRegistro(${i})">🗑</button></td>
+    </tr>`;
+  });
 }
 
 function verRango(){
-const deposito = document.getElementById("deposito").value;
-const desde = document.getElementById("fechaDesde").value;
-const hasta = document.getElementById("fechaHasta").value;
-
-if (!desde || !hasta) return alert("Selecciona rango");
-
-const tbody = document.querySelector("#tablaRegistros tbody");
-tbody.innerHTML="";
-
-if (!baseDatos[deposito]) return;
-
-for (let fecha in baseDatos[deposito]){
-if (fecha >= desde && fecha <= hasta){
-baseDatos[deposito][fecha].forEach(r=>{
-tbody.innerHTML+=`
-<tr>
-<td>${fecha}</td>
-<td>${deposito}</td>
-<td>${r.nombre}</td>
-<td>${r.cuenta}</td>
-<td>${r.remito}</td>
-<td>-</td>
-</tr>`;
-});
-}
-}
+  const deposito = document.getElementById("deposito").value;
+  const desde = document.getElementById("fechaDesde").value;
+  const hasta = document.getElementById("fechaHasta").value;
+  if (!desde || !hasta) return alert("Selecciona rango");
+  const tbody = document.querySelector("#tablaRegistros tbody");
+  tbody.innerHTML="";
+  if (!baseDatos[deposito]) return;
+  for (let fecha in baseDatos[deposito]){
+    if (fecha >= desde && fecha <= hasta){
+      baseDatos[deposito][fecha].forEach(r=>{
+        tbody.innerHTML+=`<tr>
+          <td>${fecha}</td>
+          <td>${deposito}</td>
+          <td>${r.nombre}</td>
+          <td>${r.cuenta}</td>
+          <td>${r.remito}</td>
+          <td>-</td>
+        </tr>`;
+      });
+    }
+  }
 }
 
 function exportarDia(){
-const deposito = document.getElementById("deposito").value;
-const fecha = document.getElementById("fechaReg").value;
-
-if (!baseDatos[deposito] || !baseDatos[deposito][fecha])
-return alert("No hay registros");
-
-const datos = baseDatos[deposito][fecha];
-const ws = XLSX.utils.json_to_sheet(datos);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, fecha);
-
-let nombreArchivo = deposito==="santafe" ?
-`Remitos_SantaFe_${fecha}.xlsx` :
-`Remitos_BuenosAires_${fecha}.xlsx`;
-
-XLSX.writeFile(wb, nombreArchivo);
+  const deposito = document.getElementById("deposito").value;
+  const fecha = document.getElementById("fechaReg").value;
+  if (!baseDatos[deposito] || !baseDatos[deposito][fecha]) return alert("No hay registros");
+  const datos = baseDatos[deposito][fecha];
+  const ws = XLSX.utils.json_to_sheet(datos);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, fecha);
+  let nombreArchivo = deposito==="santafe" ? `Remitos_SantaFe_${fecha}.xlsx` : `Remitos_BuenosAires_${fecha}.xlsx`;
+  XLSX.writeFile(wb, nombreArchivo);
 }
-
 </script>
-
 </body>
 </html>
+
